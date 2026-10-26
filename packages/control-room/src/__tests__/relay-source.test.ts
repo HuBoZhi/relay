@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { deriveAgentWork } from '../derive.js';
 import {
   RelayControlRoomSource,
+  needsRefresh,
   readSessionEvidence,
   reduceSessionEvents,
   type RelayMessagingLike,
@@ -163,6 +164,14 @@ describe('reduceSessionEvents', () => {
   });
 });
 
+describe('needsRefresh', () => {
+  it('re-reads a cached page that lost its timestamps', () => {
+    expect(needsRefresh([{ createdAt: '2026-10-26T05:10:29.000Z' }])).toBe(false);
+    expect(needsRefresh([{ createdAt: '2026-10-26T05:10:29.000Z' }, { createdAt: '' }])).toBe(true);
+    expect(needsRefresh([])).toBe(false);
+  });
+});
+
 describe('stored session event shapes', () => {
   it('reduces events wrapped in the engine envelope', () => {
     // Shape returned by `sessionEvents.list`: the reducer payload is nested.
@@ -263,7 +272,9 @@ describe('RelayControlRoomSource', () => {
 
     const broadcast = page.messages.find((message) => message.id === 'm1');
     expect(broadcast!.kindLabel).toBe('频道消息');
-    expect(broadcast!.toName).toBe('engineering');
+    // A channel broadcast's recipient renders as the channel's label, not its
+    // stable name, so a Chinese deployment does not leak `engineering` to users.
+    expect(broadcast!.toName).toBe('工程研发');
     expect(broadcast!.receipt).toBe('2 位成员已读');
     expect(broadcast!.receiptKnown).toBe(true);
     expect(broadcast!.day).toBe('2026-10-26');

@@ -210,10 +210,15 @@ function applyBootstrap(data) {
 
   const stillThere = state.channels.some((channel) => channel.name === previousChannel);
   if (!stillThere) {
+    // Archived channels keep their history but are the worst default: nothing
+    // there is live, so only fall back to one when nothing else exists.
+    const live = state.channels.filter((channel) => !channel.archived);
+    const pool = live.length > 0 ? live : state.channels;
     const preferred =
-      state.channels.find((channel) => channel.state === 'attention') ||
-      state.channels.find((channel) => channel.state === 'active') ||
-      state.channels[0];
+      pool.find((channel) => channel.state === 'attention') ||
+      pool.find((channel) => channel.state === 'active') ||
+      pool.find((channel) => channel.state === 'waiting' || channel.state === 'idle') ||
+      pool[0];
     state.channel = preferred ? preferred.name : null;
     state.agent = null;
     state.expanded.clear();

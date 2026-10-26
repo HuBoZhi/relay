@@ -142,6 +142,11 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
+/** A cached page is incomplete when any message lost its timestamp. */
+export function needsRefresh(cached: { createdAt: string }[]): boolean {
+  return cached.some((message) => !message.createdAt);
+}
+
 async function mapLimit<T, R>(items: T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let cursor = 0;
@@ -745,7 +750,9 @@ export class RelayControlRoomSource implements ControlRoomSource {
     await mapLimit(names, REFRESH_CONCURRENCY, async (channelName) => {
       const cached = this.messageCache.get(channelName);
       // Only warm channels we have not loaded; live events keep the rest fresh.
-      if (cached && cached.length > 0) return;
+      // A page that arrived without timestamps is re-read once so a transient
+      // miss cannot pin "日期未知" and a zero "今日消息" forever.
+      if (cached && cached.length > 0 && !needsRefresh(cached)) return;
       try {
         const raw = await withTimeout(
           this.client.messages.list(channelName, { limit: 30 }),
@@ -764,11 +771,12 @@ export class RelayControlRoomSource implements ControlRoomSource {
   }
 
   private toView(channelName: string, raw: RelayMessage): MessageView {
-    return mapMessage(raw, {
-      timezone: this.timezone,
-      channelName,
-      channelLabel: this.channelCache.get(channelName)?.displayName ?? channelName,
-    });
+    const channelLabel = this.channelCache.get(channelName)?.displayName ?? channelName;
+    const view = mapMessage(raw, { timezone: this.timezone, channelName, channelLabel });
+    // A channel broadcast's recipient is the channel, so show the channel's
+    // label rather than its stable name.
+    if (view.kind === 'channel' && view.to === channelName) view.toName = channelLabel;
+    return view;
   }
 
   private noteNewest(channelName: string): void {

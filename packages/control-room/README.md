@@ -109,6 +109,22 @@ agent-relay observer --workspace <工作空间> --expires 8h
 - 未实现：发送消息、启停智能体、任务调度、告警、账号管理（不在只读观察范围内）。
 - 主机信息依赖部署把智能体与主机关联起来（`metadata.host` / `metadata.node`），否则显示“主机未知”。
 
+## 本地验收夹具
+
+`scripts/seed-acceptance-workspace.mjs` 用本地引擎造一套可复现的验收数据：
+6 个智能体覆盖执行中 / 等待 / 异常 / 空闲 / 离线，6 个频道覆盖工作中 / 待关注 / 空闲 / 已归档。
+
+```bash
+npx @relaycast/engine --db ./relaycast.db --port 8787          # 终端 A
+KEY=$(curl -s -XPOST http://127.0.0.1:8787/v1/workspaces \
+  -H 'content-type: application/json' -d '{"name":"acceptance"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0)).data.api_key')
+WS="$KEY" npm run seed:acceptance --workspace packages/control-room   # 终端 B，保持运行
+```
+
+脚本会每 20 秒给非 `backup` 的智能体发一次 `POST /v1/agents/heartbeat`：该引擎的在线状态只由
+实时连接或心跳维持，观察者无法代持，所以夹具自己保持在线；`backup` 故意不发心跳，用来展示离线态。
+
 ## 部署兼容性（2026-10-26 本地引擎联调）
 
 用 `@relaycast/engine` 11.0.0 实测后，本服务对以下差异做了适配：
