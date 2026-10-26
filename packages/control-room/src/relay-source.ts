@@ -31,7 +31,7 @@ import {
 } from '@agent-relay/sdk/session';
 
 import { aggregateChannelState, deriveAgentWork, deriveMetricsFlags } from './derive.js';
-import type { DerivedAgentWork } from './derive.js';
+import type { DerivedAgentWork, LegacyWorkSignal } from './derive.js';
 import { displayNameOf, resolveTimezone, toIso, truncate, zonedStamp, zonedToday } from './format.js';
 import { agentDisplayName, channelDisplayName, mapMessage } from './mappers.js';
 import type { ControlRoomSource, MessageQuery } from './source.js';
@@ -53,7 +53,11 @@ import type {
 
 /** The messaging surface this source depends on; declared structurally for tests. */
 export interface RelayMessagingLike {
-  channels: { list(options?: { includeArchived?: boolean }): Promise<RelayChannel[]> };
+  channels: {
+    list(options?: { includeArchived?: boolean }): Promise<RelayChannel[]>;
+    /** Returns members, which `list` omits on the self-hosted engine. */
+    get?(name: string): Promise<RelayChannel>;
+  };
   agents: {
     list(options?: unknown): Promise<RelayAgent[]>;
     presence?(): Promise<{ agentName: string; status: string }[]>;
@@ -153,19 +157,76 @@ async function mapLimit<T, R>(items: T[], limit: number, run: (item: T) => Promi
   return results;
 }
 
-function sequenceOf(event: AgentSessionEvent): number {
-  const sequence = (event as { observability?: { sequence?: number } }).observability?.sequence;
-  return typeof sequence === 'number' ? sequence : -1;
+/**
+ * Normalize one stored session event.
+ *
+ * The engine returns events wrapped as `{ id, type, payload: {...}, sequence }`,
+ * while the reducer expects the flat `AgentSessionEvent` shape. Both are
+ * accepted so a fixture written the flat way still reduces correctly.
+ */
+function normalizeStoredEvent(raw: unknown): { event: AgentSessionEvent; order: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const type = typeof record.type === 'string' ? record.type : null;
+  if (!type) return null;
+  const payload =
+    record.payload && typeof record.payload === 'object' ? (record.payload as Record<string, unknown>) : {};
+  const { payload: _ignored, ...outer } = record;
+  const event = { ...payload, ...outer, type } as unknown as AgentSessionEvent;
+
+  const observed = (event as { observability?: { sequence?: unknown } }).observability;
+  const observedSequence = observed && typeof observed.sequence === 'number' ? observed.sequence : null;
+  // `sequence` is the engine's per-agent write order and is the safest sort key;
+  // fall back to the observability sequence, then to 0.
+  const stored = typeof record.sequence === 'number' ? record.sequence : null;
+  return { event, order: stored ?? observedSequence ?? 0 };
+}
+
+/**
+ * Reduce one agent's stored session events, and report the newest legacy
+ * `status.*` signal alongside them.
+ *
+ * Legacy statuses are kept separate rather than folded into the activity state:
+ * they carry far less information, so they may only speak when no canonical
+ * event exists.
+ */
+export function readSessionEvidence(events: unknown[]): {
+  state: AgentActivityState;
+  legacy: LegacyWorkSignal | null;
+} {
+  const normalized = events
+    .map(normalizeStoredEvent)
+    .filter((entry): entry is { event: AgentSessionEvent; order: number } => entry !== null)
+    .sort((a, b) => a.order - b.order);
+
+  let state = createAgentActivityState('idle');
+  let legacy: LegacyWorkSignal | null = null;
+  for (const { event } of normalized) {
+    const rawType = String(event.type);
+    if (rawType.startsWith('status.')) {
+      const record = event as unknown as Record<string, unknown>;
+      const reason =
+        typeof record.reason === 'string'
+          ? record.reason
+          : typeof record.message === 'string'
+            ? record.message
+            : null;
+      const at =
+        typeof record.at === 'string'
+          ? record.at
+          : event.observability && typeof event.observability.timestamp === 'string'
+            ? event.observability.timestamp
+            : null;
+      legacy = { status: rawType.slice('status.'.length), reason, at };
+    }
+    state = reduceAgentActivity(state, event).state;
+  }
+  return { state, legacy };
 }
 
 /** Reduce one agent's stored session events into a work-state input. */
 export function reduceSessionEvents(events: unknown[]): AgentActivityState {
-  const typed = (events as AgentSessionEvent[]).filter(Boolean);
-  // The reducer requires ascending sequence order; storage order is not guaranteed.
-  const sorted = [...typed].sort((a, b) => sequenceOf(a) - sequenceOf(b));
-  let state = createAgentActivityState('idle');
-  for (const event of sorted) state = reduceAgentActivity(state, event).state;
-  return state;
+  return readSessionEvidence(events).state;
 }
 
 function onlineOf(agent: RelayAgent, presence: Map<string, string>): 'online' | 'offline' | 'unknown' {
@@ -236,9 +297,15 @@ export class RelayControlRoomSource implements ControlRoomSource {
     description: '',
   };
   private sessionEventsAvailable = false;
-  private searchAvailable = false;
+  /** Whether the deployment exposes a search endpoint (until a call fails). */
+  private searchAvailable: boolean;
   private paused = false;
   private streamHealthy = false;
+  /** Consecutive stream failures; two or more is treated as "not supported". */
+  private streamFailures = 0;
+  /** True once the stream opened at least once; distinguishes "never works". */
+  private streamEverHealthy = false;
+  private refreshCount = 0;
   private refreshFailed = false;
   private cursor: number | null = null;
   private lastEventAt: string | null = null;
@@ -274,6 +341,9 @@ export class RelayControlRoomSource implements ControlRoomSource {
         workspaceKey: options.workspaceKey,
         baseUrl: options.baseUrl,
       }) as unknown as RelayMessagingLike);
+
+    // Report the search surface up front; a failed call flips it to false.
+    this.searchAvailable = typeof this.client.messages.search === 'function';
 
     if (!options.disableStream) {
       this.events =
@@ -319,15 +389,19 @@ export class RelayControlRoomSource implements ControlRoomSource {
     switch (event.type) {
       case 'connected':
         this.streamHealthy = true;
+        this.streamEverHealthy = true;
+        this.streamFailures = 0;
         this.setConnection('live', '');
         break;
       case 'disconnected':
       case 'reconnecting':
         this.streamHealthy = false;
+        this.streamFailures += 1;
         this.setConnection('reconnecting', '事件流已断开，正在重连');
         break;
       case 'error':
         this.streamHealthy = false;
+        this.streamFailures += 1;
         this.setConnection('degraded', '事件流报错，数据可能延迟');
         break;
       case 'permanentlyDisconnected':
@@ -429,6 +503,7 @@ export class RelayControlRoomSource implements ControlRoomSource {
 
   private async runRefresh(): Promise<void> {
     this.refreshFailed = false;
+    this.refreshCount += 1;
     // The four reads are independent; running them together keeps the worst
     // case (an unreachable engine that retries) at one timeout instead of four.
     await Promise.all([
@@ -458,7 +533,16 @@ export class RelayControlRoomSource implements ControlRoomSource {
       this.connectionState = 'live';
       this.connectionDetail = '';
     } else if (this.connectionState !== 'paused') {
-      this.connectionState = 'reconnecting';
+      // One interrupted socket is normal; an endpoint that never accepts the
+      // observer token is a deployment limitation and must be named as such
+      // rather than spinning on "重连中" forever.
+      // Either repeated failures, or a stream that has never opened after a few
+      // reads (an engine that rejects observer tokens on /v1/ws).
+      const unsupported = this.streamFailures >= 2 || (this.refreshCount >= 3 && !this.streamEverHealthy);
+      this.connectionState = unsupported ? 'degraded' : 'reconnecting';
+      this.connectionDetail = unsupported
+        ? '该部署未接受实时事件订阅（观察者令牌可能不受支持），已改为定时刷新'
+        : '事件流已断开，正在重连';
     }
 
     this.emit({
@@ -499,9 +583,31 @@ export class RelayControlRoomSource implements ControlRoomSource {
         '读取频道列表'
       );
       const seen = new Set<string>();
+      // `channels.list` omits members on the self-hosted engine; only
+      // `channels.get` returns them. Fetch members for the channels the list
+      // left empty, bounded so 50 channels do not open 50 sockets at once.
+      const needMembers = channels.filter((channel) => (channel.members ?? []).length === 0);
+      const memberLookups = new Map<string, string[]>();
+      if (needMembers.length > 0 && this.client.channels.get) {
+        await mapLimit(needMembers, REFRESH_CONCURRENCY, async (channel) => {
+          try {
+            const full = await withTimeout(
+              this.client.channels.get!(channel.name),
+              this.readTimeoutMs,
+              '读取频道成员'
+            );
+            const names = (full.members ?? []).map((member) => member.agentName).filter(Boolean);
+            if (names.length > 0) memberLookups.set(channel.name, names);
+          } catch (error) {
+            this.log(`读取 #${channel.name} 成员失败`, error);
+          }
+        });
+      }
+
       for (const channel of channels) {
         seen.add(channel.name);
-        const members = (channel.members ?? []).map((member) => member.agentName).filter(Boolean);
+        const listed = (channel.members ?? []).map((member) => member.agentName).filter(Boolean);
+        const members = listed.length > 0 ? listed : (memberLookups.get(channel.name) ?? []);
         const existing = this.channelCache.get(channel.name);
         this.channelCache.set(channel.name, {
           name: channel.name,
@@ -549,7 +655,7 @@ export class RelayControlRoomSource implements ControlRoomSource {
       }
 
       this.sessionEventsAvailable = Boolean(this.client.sessionEvents);
-      const activityStates = new Map<string, AgentActivityState>();
+      const evidence = new Map<string, { state: AgentActivityState; legacy: LegacyWorkSignal | null }>();
       if (this.client.sessionEvents) {
         const names = agents.map((agent) => agent.name);
         const results = await mapLimit(names, REFRESH_CONCURRENCY, async (name) => {
@@ -559,14 +665,14 @@ export class RelayControlRoomSource implements ControlRoomSource {
               this.readTimeoutMs,
               `读取 ${name} 的任务事件`
             );
-            return [name, reduceSessionEvents(events)] as const;
+            return [name, readSessionEvidence(events)] as const;
           } catch (error) {
             this.log(`读取 ${name} 的任务事件失败`, error);
             return [name, null] as const;
           }
         });
-        for (const [name, state] of results) {
-          if (state) activityStates.set(name, state);
+        for (const [name, found] of results) {
+          if (found) evidence.set(name, found);
         }
       }
 
@@ -574,11 +680,14 @@ export class RelayControlRoomSource implements ControlRoomSource {
       for (const agent of agents) {
         seen.add(agent.name);
         const online = onlineOf(agent, presence);
-        const activity = activityStates.get(agent.name) ?? null;
-        const work = deriveAgentWork(activity, online);
+        const found = evidence.get(agent.name) ?? null;
+        const work = deriveAgentWork(found?.state ?? null, online, found?.legacy ?? null);
         const displayName = agentDisplayName(agent.name, agent.metadata as Record<string, unknown>);
-        const lastActivityAt =
-          activity && activity.lastSequence >= 0 ? (toIso(agent.lastSeenAt) ?? null) : null;
+        const lastActivityAt = found
+          ? (toIso(
+              found.state.lastSequence >= 0 ? agent.lastSeenAt : (found.legacy?.at ?? agent.lastSeenAt)
+            ) ?? null)
+          : null;
         this.agentCache.set(agent.name, {
           raw: agent,
           displayName,
@@ -718,9 +827,21 @@ export class RelayControlRoomSource implements ControlRoomSource {
   // ----------------------------------------------------------------- views
 
   private agentViews(): AgentView[] {
+    // The engine's agent records carry no channel list; membership only exists
+    // on the channel side, so build the reverse index from what we read there.
+    const reverse = new Map<string, string[]>();
+    for (const [channelName, channel] of this.channelCache) {
+      for (const member of channel.memberNames) {
+        const list = reverse.get(member) ?? [];
+        list.push(channelName);
+        reverse.set(member, list);
+      }
+    }
+
     const views: AgentView[] = [];
     for (const [name, cache] of this.agentCache) {
-      const channelNames = (cache.raw.channels ?? []).map((channel) => channel.name);
+      const declared = (cache.raw.channels ?? []).map((channel) => channel.name);
+      const channelNames = declared.length > 0 ? declared : (reverse.get(name) ?? []);
       views.push({
         id: cache.raw.id ?? name,
         name,
@@ -756,7 +877,10 @@ export class RelayControlRoomSource implements ControlRoomSource {
       const members = channel.memberNames
         .map((member) => byName.get(member))
         .filter((member): member is AgentView => Boolean(member));
-      const hasTaskEvidence = members.some((member) => member.evidence === 'tasks');
+      // Both event families count as task evidence; presence and messages do not.
+      const hasTaskEvidence = members.some(
+        (member) => member.evidence === 'tasks' || member.evidence === 'status'
+      );
       const aggregate = aggregateChannelState({
         archived: channel.archived,
         members,
@@ -806,7 +930,7 @@ export class RelayControlRoomSource implements ControlRoomSource {
       channelsWorking: flags.channelsWorking,
       channelsAttention: flags.channelsAttention,
       channelsTotal: channels.length,
-      agentsRunning: agents.some((agent) => agent.evidence === 'tasks')
+      agentsRunning: agents.some((agent) => agent.evidence === 'tasks' || agent.evidence === 'status')
         ? agents.filter((agent) => agent.workState === 'running').length
         : null,
       agentsOnline: agents.length > 0 ? agents.filter((agent) => agent.online === 'online').length : null,

@@ -32,6 +32,22 @@ export const CHANNEL_STATE_LABELS: Record<ChannelState, string> = {
 /** Channel label used when the only evidence is a recent message. */
 export const RECENT_MESSAGE_LABEL = '近期有消息';
 
+/**
+ * The legacy `status.*` family some engines still expose.
+ *
+ * Canonical session events (`turn.started`, `tool.called`, …) are the richer
+ * source, but a deployment that predates them — or an engine that only accepts
+ * `status.active|idle|waiting|blocked` — still reports something usable. It is
+ * tracked separately and only consulted when no canonical event exists, so a
+ * status ping can never override measured task evidence.
+ */
+export interface LegacyWorkSignal {
+  /** `active`, `idle`, `waiting`, `blocked`, or whatever the engine sent. */
+  status: string;
+  reason: string | null;
+  at: string | null;
+}
+
 export interface DerivedAgentWork {
   workState: WorkState;
   workStateLabel: string;
@@ -62,20 +78,51 @@ function describeReason(reason: string | undefined, toolName?: string): string |
 }
 
 /**
+ * Whether a reduced state carries an actual work signal.
+ *
+ * A bare `session.started` proves a session exists, not that anything is
+ * running — `deriveActivity` still reports `idle` for it. Treating that as
+ * authoritative would mask the legacy `status.*` signal some engines send
+ * instead of canonical `turn.*` events, so idle-from-startup must not win.
+ */
+export function hasCanonicalWorkSignal(state: AgentActivityState): boolean {
+  return (
+    state.starting ||
+    state.failed ||
+    state.turnActive ||
+    state.turnFinished ||
+    Boolean(state.waitingReason) ||
+    state.activeTools.size > 0 ||
+    state.activeTextBlocks.size > 0 ||
+    state.activeReasoningBlocks.size > 0 ||
+    state.pendingApprovals.size > 0
+  );
+}
+
+/**
  * Turn a reduced activity state into a work status.
  *
  * `online` is connectivity and is applied last: an agent whose socket died is
- * `offline` even if its last known activity was `thinking`.
+ * `offline` even if its last known activity was `thinking`. `legacy` is a
+ * fallback used only when no canonical work signal exists.
  */
 export function deriveAgentWork(
   activityState: AgentActivityState | null,
-  online: 'online' | 'offline' | 'unknown'
+  online: 'online' | 'offline' | 'unknown',
+  legacy: LegacyWorkSignal | null = null
 ): DerivedAgentWork {
   const label = (state: WorkState): string => WORK_STATE_LABELS[state];
+  const canonical =
+    activityState && activityState.lastSequence >= 0 && hasCanonicalWorkSignal(activityState)
+      ? activityState
+      : null;
 
-  if (!activityState || activityState.lastSequence < 0) {
-    // No task events at all. Presence alone cannot prove "idle": the doc's
-    // definition of idle requires positive confirmation that nothing runs.
+  if (!canonical) {
+    // A legacy status is worth reporting even when the agent is offline — say
+    // what it was last doing instead of discarding the only evidence we have.
+    if (legacy) return deriveFromLegacyStatus(legacy, online);
+    // Presence alone cannot prove "idle": the doc's definition of idle requires
+    // positive confirmation that nothing runs.
     if (online === 'offline') {
       return {
         workState: 'offline',
@@ -96,18 +143,18 @@ export function deriveAgentWork(
     };
   }
 
-  const activity = activityState.activity;
+  const activity = canonical.activity;
   let workState: WorkState;
   let task: string;
   let reason: string | null = null;
 
-  if (activityState.failed || activity === 'error') {
+  if (canonical.failed || activity === 'error') {
     workState = 'attention';
-    reason = activityState.errorReason ? `运行错误：${activityState.errorReason}` : '运行错误';
+    reason = canonical.errorReason ? `运行错误：${canonical.errorReason}` : '运行错误';
     task = reason;
   } else if (activity === 'waiting') {
     workState = 'waiting';
-    reason = describeReason(activityState.waitingReason ?? '等待输入');
+    reason = describeReason(canonical.waitingReason ?? '等待输入');
     task = reason ?? '等待依赖或输入';
   } else if (activity === 'idle') {
     workState = 'idle';
@@ -117,7 +164,7 @@ export function deriveAgentWork(
     task = describeReason('session_starting') ?? '会话启动中';
   } else if (activity === 'using_tool') {
     workState = 'running';
-    const tool = [...activityState.activeTools.values()].at(-1);
+    const tool = [...canonical.activeTools.values()].at(-1);
     task = describeReason('tool_call', tool?.name) ?? '正在调用工具';
   } else if (activity === 'typing') {
     workState = 'running';
@@ -148,6 +195,48 @@ export function deriveAgentWork(
     task,
     reason,
     evidence: 'tasks',
+  };
+}
+
+const LEGACY_STATUS_MAP: Record<string, { state: WorkState; task: string }> = {
+  active: { state: 'running', task: '状态事件报告：正在执行任务' },
+  waiting: { state: 'waiting', task: '状态事件报告：等待依赖或输入' },
+  blocked: { state: 'attention', task: '状态事件报告：任务阻塞' },
+  idle: { state: 'idle', task: '状态事件报告：当前没有执行中的任务' },
+};
+
+/** Map a legacy `status.*` signal, keeping its reason verbatim. */
+function deriveFromLegacyStatus(
+  legacy: LegacyWorkSignal,
+  online: 'online' | 'offline' | 'unknown'
+): DerivedAgentWork {
+  const mapped = LEGACY_STATUS_MAP[legacy.status];
+  const state: WorkState = mapped ? mapped.state : 'unknown';
+  const task = mapped
+    ? legacy.reason && (state === 'waiting' || state === 'attention')
+      ? `${mapped.task}：${legacy.reason}`
+      : mapped.task
+    : `状态事件「${legacy.status}」无法归类`;
+  const reason = state === 'waiting' || state === 'attention' ? legacy.reason : null;
+
+  if (online === 'offline') {
+    return {
+      workState: 'offline',
+      workStateLabel: WORK_STATE_LABELS.offline,
+      activity: null,
+      task: `连接已断开 · 最后状态：${WORK_STATE_LABELS[state]}`,
+      reason,
+      evidence: 'status',
+    };
+  }
+
+  return {
+    workState: state,
+    workStateLabel: WORK_STATE_LABELS[state],
+    activity: null,
+    task,
+    reason,
+    evidence: 'status',
   };
 }
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { RelayControlRoomSource, reduceSessionEvents, type RelayMessagingLike } from '../relay-source.js';
+import { deriveAgentWork } from '../derive.js';
+import {
+  RelayControlRoomSource,
+  readSessionEvidence,
+  reduceSessionEvents,
+  type RelayMessagingLike,
+} from '../relay-source.js';
 
 const NOW = Date.parse('2026-10-26T06:32:08Z');
 
@@ -157,6 +163,61 @@ describe('reduceSessionEvents', () => {
   });
 });
 
+describe('stored session event shapes', () => {
+  it('reduces events wrapped in the engine envelope', () => {
+    // Shape returned by `sessionEvents.list`: the reducer payload is nested.
+    const { state, legacy } = readSessionEvidence([
+      {
+        id: 'e2',
+        type: 'tool.called',
+        payload: { callId: 'call-1', tool: '运行测试', observability: observability(2) },
+        sequence: 2,
+      },
+      { id: 'e1', type: 'session.started', payload: { observability: observability(1) }, sequence: 1 },
+    ]);
+    expect(state.lastSequence).toBe(2);
+    expect(state.activity).toBe('using_tool');
+    expect(legacy).toBeNull();
+    expect(deriveAgentWork(state, 'online').workState).toBe('running');
+  });
+
+  it('falls back to legacy status events when no canonical event exists', () => {
+    const { state, legacy } = readSessionEvidence([
+      { type: 'status.waiting', payload: { reason: '等待依赖扫描' }, sequence: 1 },
+    ]);
+    expect(state.lastSequence).toBe(-1);
+    expect(legacy).toEqual({ status: 'waiting', reason: '等待依赖扫描', at: null });
+
+    const work = deriveAgentWork(state, 'online', legacy);
+    expect(work.workState).toBe('waiting');
+    expect(work.evidence).toBe('status');
+    expect(work.reason).toBe('等待依赖扫描');
+    expect(work.task).toContain('等待依赖扫描');
+  });
+
+  it('maps blocked legacy status to attention and idle to idle', () => {
+    const blocked = readSessionEvidence([{ type: 'status.blocked', payload: {}, sequence: 1 }]);
+    expect(deriveAgentWork(blocked.state, 'online', blocked.legacy).workState).toBe('attention');
+
+    const idle = readSessionEvidence([{ type: 'status.idle', payload: {}, sequence: 1 }]);
+    const work = deriveAgentWork(idle.state, 'online', idle.legacy);
+    expect(work.workState).toBe('idle');
+    expect(work.evidence).toBe('status');
+  });
+
+  it('never lets a legacy status override canonical task evidence', () => {
+    const { state, legacy } = readSessionEvidence([
+      { type: 'session.started', payload: { observability: observability(1) }, sequence: 1 },
+      { type: 'turn.started', payload: { turnId: 't1', observability: observability(2) }, sequence: 2 },
+      { type: 'status.idle', payload: {}, sequence: 3 },
+    ]);
+    expect(legacy?.status).toBe('idle');
+    const work = deriveAgentWork(state, 'online', legacy);
+    expect(work.workState).toBe('running');
+    expect(work.evidence).toBe('tasks');
+  });
+});
+
 describe('RelayControlRoomSource', () => {
   it('derives channel and agent state from session events', async () => {
     const source = makeSource(fakeClient());
@@ -184,11 +245,11 @@ describe('RelayControlRoomSource', () => {
 
     const reviewer = bootstrap.agents.find((agent) => agent.name === 'reviewer');
     expect(reviewer!.online).toBe('offline');
-    expect(reviewer!.evidence).toBe('tasks');
-    // Connectivity wins over the last known activity, but the activity evidence
-    // stays visible in the task caption.
+    // A bare `session.started` is not work evidence, so an offline agent with
+    // nothing else reports no evidence at all rather than a guessed state.
+    expect(reviewer!.evidence).toBe('none');
     expect(reviewer!.workState).toBe('offline');
-    expect(reviewer!.task).toContain('最后状态');
+    expect(reviewer!.task).toContain('连接已断开');
 
     expect(bootstrap.capabilities.sessionEvents).toBe(true);
     expect(bootstrap.capabilities.streaming).toBe(false);

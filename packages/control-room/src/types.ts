@@ -61,8 +61,14 @@ export interface ConnectionView {
  */
 export type WorkState = 'running' | 'waiting' | 'idle' | 'attention' | 'offline' | 'unknown';
 
-/** What evidence a state was derived from. Rendered next to the status text. */
-export type StateEvidence = 'tasks' | 'presence' | 'messages' | 'none';
+/**
+ * What evidence a state was derived from. Rendered next to the status text.
+ *
+ * `tasks` = canonical session events (`turn.*`, `tool.*`, …); `status` = the
+ * legacy `status.*` family some engines still expose; `presence` = connectivity
+ * only; `messages` = recent message activity.
+ */
+export type StateEvidence = 'tasks' | 'status' | 'presence' | 'messages' | 'none';
 
 export interface AgentView {
   id: string;

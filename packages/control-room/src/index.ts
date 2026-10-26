@@ -9,7 +9,7 @@ export * from './types.js';
 export { aggregateChannelState, deriveAgentWork, deriveMetricsFlags, receiptLabel } from './derive.js';
 export { DemoControlRoomSource } from './demo-source.js';
 export type { DemoSourceOptions } from './demo-source.js';
-export { RelayControlRoomSource, reduceSessionEvents } from './relay-source.js';
+export { RelayControlRoomSource, readSessionEvidence, reduceSessionEvents } from './relay-source.js';
 export type { RelayMessagingLike, RelaySourceOptions } from './relay-source.js';
 export { startControlRoom } from './server.js';
 export type { ControlRoomServer, ControlRoomServerOptions } from './server.js';

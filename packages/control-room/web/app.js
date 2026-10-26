@@ -758,8 +758,13 @@ function renderSummary() {
 
 function evidenceLabel(evidence) {
   return (
-    { tasks: '任务与会话事件', messages: '近期消息', presence: '在线状态', none: '无可用证据' }[evidence] ||
-    '无可用证据'
+    {
+      tasks: '任务与会话事件',
+      status: '旧版状态事件（status.*）',
+      messages: '近期消息',
+      presence: '在线状态',
+      none: '无可用证据',
+    }[evidence] || '无可用证据'
   );
 }
 
