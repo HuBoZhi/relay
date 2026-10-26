@@ -38,6 +38,7 @@
     "packages/broker-win32-x64",
     "packages/browser-primitive",
     "packages/cloud",
+    "packages/control-room",
     "packages/credential-proxy",
     "packages/events",
     "packages/gateway",

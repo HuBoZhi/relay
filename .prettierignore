@@ -9,3 +9,7 @@ packages/config/src/cli-registry.generated.ts
 tests/benchmarks/head-to-head.ts
 .agentworkforce/trajectories/
 .trajectories/
+
+# Control room web assets vendored from the design prototype (compact CSS, minified icon set)
+packages/control-room/web/styles.css
+packages/control-room/web/icons.js

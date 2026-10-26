@@ -14,6 +14,7 @@ const workspacePackages = [
   'agent',
   'cloud',
   'config',
+  'control-room',
   'events',
   'fleet',
   'gateway',

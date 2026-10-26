@@ -1,0 +1,252 @@
+/* Additions for the live control room: connection state, unknown states,
+   pagination, and loading placeholders. The visual system stays the one from
+   the design prototype (styles.css). */
+
+/* ---------------------------------------------------------- connection state */
+
+.connection-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 28px;
+  padding: 9px 12px;
+  border: 1px solid #6b5433;
+  border-radius: 5px;
+  background: #2a2217;
+  color: #e5c896;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.connection-bar[data-state='error'] {
+  border-color: #7a4436;
+  background: #2b1a16;
+  color: #e8ab98;
+}
+
+.connection-bar > span:nth-child(2) {
+  flex: 1;
+}
+
+.connection-bar .button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 10px;
+  border-color: #6b5433;
+  background: #33291b;
+  color: #f0d9b0;
+}
+
+.notice-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 28px 4px;
+  padding: 8px 12px;
+  border: 1px solid #2f4a53;
+  border-radius: 5px;
+  background: #122229;
+  color: #9dc0c6;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.notice-bar > span:nth-child(2) {
+  flex: 1;
+}
+
+.notice-bar .icon-button {
+  height: 22px;
+  width: 22px;
+}
+
+#connection-chip[data-state='live'] {
+  border-color: #2e5c50;
+  color: #8fd6be;
+}
+
+#connection-chip[data-state='paused'] {
+  border-color: #60543f;
+  color: var(--amber);
+}
+
+#connection-chip[data-state='reconnecting'],
+#connection-chip[data-state='degraded'],
+#connection-chip[data-state='error'] {
+  border-color: #6b4a37;
+  color: #e0a884;
+}
+
+#connection-chip[data-state='connecting'] {
+  color: #9fbdbe;
+}
+
+/* Demo mode keeps a visible marker: nothing on screen is real. */
+#connection-chip[data-mode='demo'] {
+  border-style: dashed;
+}
+
+/* ------------------------------------------------------------- unknown state */
+
+.status-dot.unknown {
+  background: transparent;
+  border: 1px solid #7d8b96;
+}
+
+.channel-status.waiting,
+.channel-status.unknown {
+  color: #94a3ae;
+}
+
+.agent-node.unknown .node-shell {
+  stroke-dasharray: 2 2;
+  stroke: #70838f;
+}
+
+.channel-item[data-status='unknown'] .channel-spark i,
+.channel-item[data-status='waiting'] .channel-spark i {
+  background: #445661;
+}
+
+.legend-node.unknown {
+  border: 1px dashed #73848f;
+  background: transparent;
+}
+
+.channel-task.waiting .icon,
+.channel-task.unknown .icon {
+  color: #8fa3ae;
+}
+
+/* ------------------------------------------------------------------ paging */
+
+.load-more {
+  display: block;
+  width: calc(100% - 44px);
+  margin: 4px 22px 14px;
+  padding: 8px;
+  border: 1px solid #2c3d47;
+  border-radius: 4px;
+  background: #131d24;
+  color: #a8c2c9;
+  font-size: 10px;
+}
+
+.load-more:hover {
+  border-color: #476a70;
+  background: #182831;
+}
+
+/* -------------------------------------------------------------- loading UI */
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 22px;
+  color: #8ba2ad;
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+.loading-state strong {
+  color: #c7dde2;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.loading-state .skeleton {
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1b262e 0%, #24333c 50%, #1b262e 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shift 1.6s ease-in-out infinite;
+}
+
+.loading-state .skeleton.short {
+  width: 62%;
+}
+
+.error-state {
+  margin: 22px;
+  padding: 16px;
+  border: 1px solid #6b4034;
+  border-radius: 6px;
+  background: #241713;
+  color: #e2b6a4;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.error-state strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #f0cbb9;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.error-state button {
+  margin-top: 10px;
+  border: 1px solid #6b4034;
+  border-radius: 4px;
+  padding: 5px 11px;
+  font-size: 10px;
+  color: #f2d3c2;
+}
+
+.read-more-note,
+.agent-note-warn {
+  color: #d5b184;
+}
+
+/* Message cards keep their delivery claim honest. */
+.message-read.unknown {
+  color: #8d9ba6;
+}
+
+/* Empty-channel and empty-filter states share the prototype's empty-state look. */
+.empty-state p {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: #7d8f9a;
+}
+
+@keyframes skeleton-shift {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-state .skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .connection-bar,
+  .notice-bar {
+    margin-left: 22px;
+    margin-right: 22px;
+  }
+}
+
+@media (max-width: 620px) {
+  .connection-bar,
+  .notice-bar {
+    margin-left: 17px;
+    margin-right: 17px;
+    font-size: 10px;
+  }
+
+  .load-more {
+    width: calc(100% - 34px);
+    margin-left: 17px;
+    margin-right: 17px;
+  }
+}

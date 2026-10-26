@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1015">
+  <meta name="description" content="协作控制中心 — 频道、智能体与消息流转的交互设计原型。所有数据均为演示数据。">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+  <title>协作控制中心 · 全局工作台</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="频道导航">
+      <a class="brand" href="./" aria-label="协作控制中心首页"><span class="brand-mark" aria-hidden="true">◈</span><span>协作中枢<small>全局观察工作台</small></span></a>
+      <div class="workspace"><span class="workspace-icon" data-icon="layers"></span><div><strong>协作工作空间</strong><span>本地集群 <i class="tiny-dot"></i> 演示空间</span></div><span class="workspace-version">01</span></div>
+      <button class="nav-overview" id="overview-button"><span data-icon="orbit"></span>系统总览<span class="key-hint">↖</span></button>
+      <div class="section-label"><span>工作频道</span><span class="mono">08</span></div>
+      <label class="search-field"><span data-icon="search"></span><input id="channel-search" type="search" placeholder="搜索频道…" aria-label="搜索频道"><kbd>/</kbd></label>
+      <div class="channel-filters" role="group" aria-label="频道状态筛选"><button data-filter="all" class="active" aria-pressed="true">全部 <span>8</span></button><button data-filter="active" aria-pressed="false">工作中 <span>5</span></button><button data-filter="warning" aria-pressed="false">异常 <span>1</span></button></div>
+      <nav id="channel-list" class="channel-list" aria-label="频道列表"></nav>
+      <div class="sidebar-bottom"><div class="cluster-mini"><div class="section-label"><span>集群连接</span><span class="tiny-dot"></span></div><div class="cluster-line"><span data-icon="server"></span><strong>本地集群</strong><span>演示</span></div><div class="cluster-bars" aria-hidden="true"></div><p>24 个智能体 · 3 台运行主机</p></div><div class="user-strip"><span class="user-avatar">观</span><div><strong>观察者视角</strong><span>只读工作台</span></div><span data-icon="scan-eye"></span></div></div>
+    </aside>
+    <main class="main-shell">
+      <header class="topbar"><div class="breadcrumb">工作空间<span>/</span><strong>系统总览</strong></div><div class="topbar-right"><span class="demo-label"><span data-icon="flask-conical"></span>交互原型 · 演示数据</span><time id="system-clock" class="mono">14:32:08</time><span class="timezone">北京时间</span><button class="icon-button" id="help-button" aria-label="查看交互说明" title="交互说明"><span data-icon="circle-help"></span></button></div></header>
+      <section class="overview-heading"><div><div class="eyebrow">多智能体协作观察</div><h1>协作控制中心<span class="heading-dot"></span></h1><p>全局频道状态、智能体任务与消息流转</p></div><button id="live-toggle" class="button live-button" aria-pressed="false"><span class="tiny-dot"></span><span id="live-label">流转演示中</span><span data-icon="pause"></span></button></section>
+      <section class="metrics" aria-label="系统指标（演示数据）">
+        <div class="metric"><div class="metric-label">工作频道<span data-icon="radio-tower"></span></div><div class="metric-value"><span>05</span><small>/ 08</small><span class="metric-note">同时协作</span></div><div class="metric-track"><i style="width:62.5%"></i></div></div>
+        <div class="metric"><div class="metric-label">执行中智能体<span data-icon="cpu"></span></div><div class="metric-value"><span id="active-agent-count">11</span><small>/ 24</small><span class="mini-pulse" aria-hidden="true">▂▆▃▇▅▂▅</span></div><p>工作状态与在线状态分别展示</p></div>
+        <div class="metric"><div class="metric-label">今日消息<span data-icon="messages-square"></span></div><div class="metric-value"><span id="message-total">1,284</span><span class="metric-note">条</span></div><p><span class="cyan">↗ 18.6%</span> 相比昨日 · 演示统计</p></div>
+        <div class="metric"><div class="metric-label">待关注<span data-icon="triangle-alert"></span></div><div class="metric-value"><span class="amber">01</span><span class="metric-note">个频道</span></div><button class="metric-link" id="alert-link">质量审查等待依赖 <span data-icon="arrow-up-right"></span></button></div>
+      </section>
+      <div class="workbench">
+        <section class="network-panel" id="network-panel" aria-label="系统数据流转视图">
+          <div class="panel-heading"><div><span class="eyebrow">全局协作网络</span><h2>系统数据流转<span class="live-chip" id="topology-live">实时演示</span></h2></div><button class="icon-button" id="fullscreen-button" aria-label="全屏查看流转视图" title="全屏查看"><span data-icon="maximize"></span></button></div>
+          <div class="graph-toolbar"><div class="segmented" role="group" aria-label="拓扑范围"><button data-view="global" class="active" aria-pressed="true">全局拓扑</button><button data-view="channel" aria-pressed="false">频道聚焦</button></div><span class="graph-hint"><span data-icon="mouse-pointer-2"></span>点击节点，追踪协作</span></div>
+          <div class="graph-stage" id="graph-stage"><div class="graph-coordinate top-left">系统 / 工作空间一<br><span>逻辑协作网络</span></div><div class="graph-coordinate top-right">08 个频道<br><span>24 个智能体</span></div><svg id="network" viewBox="0 0 900 620" aria-label="频道与智能体逻辑拓扑，可点击频道或智能体查看详情"><title>系统数据流转图</title></svg><div class="graph-scale"><span class="scale-mark"></span>逻辑关系图 · 非物理网络</div><div class="graph-controls"><button class="icon-button" id="zoom-out" aria-label="缩小拓扑" title="缩小"><span data-icon="minus"></span></button><span id="zoom-value" class="mono">100%</span><button class="icon-button" id="zoom-in" aria-label="放大拓扑" title="放大"><span data-icon="plus"></span></button><span class="control-divider"></span><button class="icon-button" id="zoom-reset" aria-label="重置拓扑视图" title="重置视图"><span data-icon="scan"></span></button></div></div>
+          <div class="graph-legend"><span><i class="legend-node active"></i>执行中</span><span><i class="legend-node idle"></i>等待 / 空闲</span><span><i class="legend-node warning"></i>异常</span><span><i class="legend-node offline"></i>离线</span><span class="legend-flow"><i></i>消息方向</span></div>
+          <section class="traffic-section" aria-label="消息吞吐趋势"><div class="traffic-heading"><div><span>消息吞吐</span><small>最近 12 分钟</small></div><strong class="mono">42 <small>条 / 分钟</small></strong></div><div class="traffic-chart" id="traffic-chart"></div><div class="traffic-axis mono"><span>14:21</span><span>14:24</span><span>14:27</span><span>14:30</span><span>14:32</span></div></section>
+          <section class="activity-section"><div class="activity-heading"><h3>最近流转</h3><span class="tiny-dot"></span></div><div id="recent-activity"></div></section>
+        </section>
+        <aside class="inspector" aria-label="选中频道详情"><div id="channel-summary"></div><div class="detail-tabs" role="tablist" aria-label="频道详情类型"><button id="messages-tab" role="tab" aria-selected="true" aria-controls="messages-panel" class="active">消息时间线<span id="message-count"></span></button><button id="agents-tab" role="tab" aria-selected="false" aria-controls="agents-panel" tabindex="-1">参与节点<span id="agent-count"></span></button></div><section id="messages-panel" class="detail-panel" role="tabpanel" aria-labelledby="messages-tab"><div class="message-tools"><label class="search-field"><span data-icon="search"></span><input id="message-search" type="search" placeholder="搜索消息内容或发送者" aria-label="搜索频道消息"></label><div class="message-filters"><label><span class="sr-only">发送者筛选</span><select id="sender-filter"><option value="all">全部发送者</option></select></label><label><span class="sr-only">历史时间范围</span><select id="date-filter"><option value="today">今日</option><option value="all">全部历史</option><option value="yesterday">昨日</option></select></label></div></div><div id="message-timeline" class="message-timeline"></div></section><section id="agents-panel" class="detail-panel agent-panel" role="tabpanel" aria-labelledby="agents-tab" hidden></section><div class="inspector-footer"><span data-icon="shield-check"></span><span>只读观察 · 不影响智能体运行</span><span class="tiny-dot"></span></div></aside>
+      </div>
+      <footer class="system-footer"><span><i class="tiny-dot"></i><span id="footer-state">演示事件流已连接</span></span><span>协作控制中心 <span class="footer-divider">/</span> 第一版设计预览 <span class="footer-divider">/</span> 2026.10.26</span></footer>
+    </main>
+  </div>
+  <dialog id="message-dialog" class="message-dialog" aria-labelledby="dialog-title"><header class="dialog-header"><div><span class="eyebrow">消息阅读窗口</span><h2 id="dialog-title">消息详情</h2></div><button class="icon-button" id="dialog-close" aria-label="关闭消息详情"><span data-icon="x"></span></button></header><div id="dialog-meta" class="dialog-meta"></div><div id="dialog-body" class="dialog-body" tabindex="0"></div><footer class="dialog-footer"><div class="dialog-paging"><button class="icon-button" id="previous-message" aria-label="上一条消息"><span data-icon="chevron-left"></span></button><span id="dialog-position" class="mono"></span><button class="icon-button" id="next-message" aria-label="下一条消息"><span data-icon="chevron-right"></span></button></div><button class="button" id="copy-message"><span data-icon="copy"></span>复制全文</button><span class="escape-hint">退出键关闭</span></footer></dialog>
+  <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title"><div class="dialog-header"><div><span class="eyebrow">使用指南</span><h2 id="help-title">探索这个控制中心</h2></div><button class="icon-button" id="help-close" aria-label="关闭交互说明"><span data-icon="x"></span></button></div><ol><li><strong>选择频道</strong><p>左侧频道和图上的频道节点均可点击，消息与状态随之切换。</p></li><li><strong>追踪智能体</strong><p>点击小圆点，或切换「频道聚焦」，查看每个智能体正在执行的任务。</p></li><li><strong>阅读完整消息</strong><p>长消息可原地展开；点击正文或放大按钮，进入完整阅读窗口。</p></li><li><strong>控制信息密度</strong><p>支持频道筛选、消息搜索、发送者与日期筛选、缩放和拖动画布。</p></li></ol><div class="help-note">所有名称、消息与指标均为演示数据。暂停仅冻结原型中的流转演示。快捷键：按斜杠键搜索频道，按退出键关闭弹窗。</div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./icons.js"></script>
+  <script src="./fixtures.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

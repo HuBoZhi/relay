@@ -1,0 +1,37 @@
+{
+  "name": "@agent-relay/control-room",
+  "version": "14.0.0",
+  "private": true,
+  "description": "Read-only Relay collaboration control room: channels, agents, and live message flow over HTTP.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "relay-control-room": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "web",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli.js",
+    "test": "vitest run --root ../.. packages/control-room/"
+  },
+  "dependencies": {
+    "@agent-relay/sdk": "14.0.0"
+  },
+  "license": "Apache-2.0"
+}
