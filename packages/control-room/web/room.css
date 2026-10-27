@@ -250,3 +250,256 @@
     margin-right: 17px;
   }
 }
+
+/* Operator workspace: readable text, stable regions, and usable touch targets. */
+.workbench {
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 29vw, 420px);
+}
+
+.network-panel {
+  overflow: auto;
+}
+
+.graph-stage {
+  flex: 1 0 340px;
+}
+
+.panel-heading,
+.graph-toolbar,
+.graph-legend {
+  flex-shrink: 0;
+}
+
+.graph-legend {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 11px;
+}
+
+.activity-section {
+  max-height: 140px;
+  overflow: auto;
+}
+
+.activity-row,
+.activity-route b,
+.activity-row time,
+.activity-tag {
+  font-size: 11px;
+}
+
+.activity-row {
+  min-height: 28px;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+}
+
+.channel-summary {
+  padding: 18px 22px 14px;
+  flex-shrink: 0;
+}
+
+.channel-title h2,
+.channel-info strong,
+.workspace strong {
+  overflow-wrap: anywhere;
+}
+
+.channel-summary > p,
+.channel-task,
+.agent-card p,
+.agent-list-note {
+  font-size: 12px;
+}
+
+.channel-eyebrow .eyebrow,
+.channel-status,
+.channel-people > span,
+.channel-people > small,
+.agent-meta,
+.agent-note,
+.message-read,
+.metric p,
+.metric-link,
+.day-separator,
+.message-kind {
+  font-size: 11px;
+}
+
+.metric p,
+.metric-link {
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.message-body {
+  font-size: 13px;
+  line-height: 1.85;
+  color: #bccbd4;
+}
+
+.message-route strong,
+.message-route .recipient,
+.agent-card-title strong {
+  font-size: 12px;
+}
+
+.message-expand,
+.message-meta time,
+.message-filters select,
+.message-tools input {
+  font-size: 11px;
+}
+
+.message-tools .search-field,
+.message-filters select {
+  min-height: 36px;
+}
+
+.message-scope {
+  margin-top: 8px;
+  color: #91a8b6;
+  font-size: 11px;
+}
+
+.message-meta .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.message-footer-row {
+  flex-wrap: wrap;
+}
+
+.message-read,
+.day-separator,
+.agent-meta {
+  color: #92a9b7;
+}
+
+.channel-summary,
+.channel-task,
+.agent-card,
+.dialog-meta,
+.connection-bar,
+.notice-bar,
+.breadcrumb,
+.workspace > div,
+.cluster-line strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.message-route strong,
+.dialog-route strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.channel-info small {
+  flex-wrap: wrap;
+}
+
+.channel-spark,
+.cluster-bars,
+.mini-pulse {
+  display: none;
+}
+
+.channel-item:focus-visible,
+.agent-card:focus-visible {
+  outline-offset: -2px;
+}
+
+.search-field:focus-within {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.connection-bar .button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1200px) and (min-width: 1001px) {
+  .workbench {
+    grid-template-columns: minmax(0, 1fr) 350px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .network-panel {
+    overflow: visible;
+  }
+  .graph-stage {
+    flex-basis: 365px;
+  }
+  .activity-section {
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 620px) {
+  .overview-heading {
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .overview-heading > div {
+    min-width: 0;
+  }
+  .overview-heading p {
+    line-height: 1.7;
+  }
+  .live-button {
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+  .graph-stage {
+    flex-basis: 320px;
+  }
+  .graph-hint {
+    display: none;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 52px;
+    gap: 6px;
+    padding-block: 8px;
+  }
+  .breadcrumb {
+    flex: 1;
+  }
+  .breadcrumb strong {
+    overflow-wrap: anywhere;
+  }
+  .channel-filters button,
+  .segmented button,
+  .icon-button,
+  .message-meta .icon-button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .channel-filters {
+    gap: 6px;
+  }
+  .inspector {
+    min-height: 760px;
+  }
+  .message-tools input {
+    font-size: 12px;
+  }
+  .graph-legend {
+    font-size: 10px;
+  }
+  .graph-scale {
+    display: none;
+  }
+  .system-footer {
+    height: auto;
+    min-height: 32px;
+    padding-block: 8px;
+  }
+}

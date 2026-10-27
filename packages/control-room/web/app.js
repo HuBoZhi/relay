@@ -72,6 +72,10 @@ const state = {
   hasMore: false,
   nextBefore: null,
   loadingMessages: false,
+  messageRequest: 0,
+  messageAbort: null,
+  streamFailed: false,
+  seenMessages: new Set(),
   messageError: null,
   fatal: null,
   dialogId: null,
@@ -223,7 +227,10 @@ function applyBootstrap(data) {
     state.agent = null;
     state.expanded.clear();
     state.pending = 0;
+    $('#pending-messages')?.remove();
     $('#message-search').value = '';
+    $('#sender-filter').value = 'all';
+    $('#date-filter').value = preferred?.archived ? 'all' : 'today';
   }
 
   renderAll();
@@ -347,10 +354,13 @@ function selectChannel(name, agent = null) {
   state.panX = 0;
   state.panY = 0;
   state.pending = 0;
+  $('#pending-messages')?.remove();
   if (changed) {
     state.expanded.clear();
     $('#message-search').value = '';
-    $('#date-filter').value = 'today';
+    $('#date-filter').value = currentChannel()?.archived ? 'all' : 'today';
+    $('#sender-filter').value = 'all';
+    state.messageError = null;
     state.nextBefore = null;
     state.hasMore = false;
   }
@@ -486,6 +496,8 @@ function layoutGlobal() {
 
   const agentPositions = [];
   for (const channel of channels) {
+    // Expand one channel at a time; showing every member obscures the network.
+    if (channel.name !== state.channel) continue;
     const base = placed.get(channel.name);
     const members = channelAgents(channel);
     const dx = base.x - cx;
@@ -496,7 +508,7 @@ function layoutGlobal() {
     members.forEach((agent, index) => {
       const spread = Math.min(52, 26 + members.length * 7);
       const offset = (index - (members.length - 1) / 2) * (members.length > 1 ? spread / 1.4 : 0);
-      const distance = 40 + (index % 2) * 16;
+      const distance = 52 + Math.abs(outward.x) * 50 + (index % 2) * 12;
       const x = base.x + tangent.x * offset + outward.x * distance;
       const y = base.y + tangent.y * offset + outward.y * distance;
       agentPositions.push({
@@ -563,8 +575,8 @@ function channelNode(entry, index) {
   )}，${esc(channel.stateLabel)}" aria-pressed="${selected}" transform="translate(${x} ${y})"><title>#${esc(
     channel.displayName
   )} · ${esc(channel.stateLabel)} · ${esc(channel.stateReason)}</title><rect class="channel-shape" x="-77" y="-28" width="154" height="56" rx="7"/><text x="-63" y="-5" class="channel-name"># ${esc(
-    channel.displayName
-  ).slice(0, 10)}</text><text x="-63" y="15" class="channel-caption">${esc(channel.stateLabel)} · ${
+    channel.displayName.slice(0, 10)
+  )}</text><text x="-63" y="15" class="channel-caption">${esc(channel.stateLabel)} · ${
     channel.memberCount
   } 个节点</text><circle cx="62" cy="-13" r="2.5" fill="${
     cls === 'warning' ? '#deb375' : cls === 'active' ? '#7ce7d5' : '#667985'
@@ -618,7 +630,8 @@ function renderGraph() {
       } ${flowing ? '' : 'inactive'}" d="${routeToChannel(entry.x, entry.y)}" marker-end="url(#${
         cls === 'warning' ? 'arrow-amber' : 'arrow'
       })"/>`;
-      if (flowing) html += packet(`flow-${index}`, 4 + index * 0.4, index * 0.8, cls === 'warning');
+      if (flowing && state.mode === 'demo')
+        html += packet(`flow-${index}`, 4 + index * 0.4, index * 0.8, cls === 'warning');
     });
 
     layout.agents.forEach((entry, index) => {
@@ -627,7 +640,7 @@ function renderGraph() {
       html += `<path id="${id}" class="agent-link ${flowing ? '' : 'inactive'}" d="M ${entry.origin.x} ${
         entry.origin.y
       } Q ${entry.x} ${entry.origin.y} ${entry.x} ${entry.y}"/>`;
-      if (flowing) html += packet(id, 3 + (index % 5) * 0.6, index % 7);
+      if (flowing && state.mode === 'demo') html += packet(id, 3 + (index % 5) * 0.6, index % 7);
     });
 
     html +=
@@ -654,7 +667,7 @@ function renderGraph() {
       const flowing = agentClass(entry.agent) === 'active';
       const id = `focus-${index}`;
       html += `<path id="${id}" class="channel-link ${flowing ? 'selected' : 'inactive'}" d="M 450 300 Q ${entry.x} 300 ${entry.x} ${entry.y}" marker-end="url(#arrow)"/>`;
-      if (flowing) html += packet(id, 3.5, index);
+      if (flowing && state.mode === 'demo') html += packet(id, 3.5, index);
     });
     html += `<rect x="327" y="257" width="246" height="86" rx="9" fill="#16363a" stroke="#6dbbb6"/><text x="450" y="288" text-anchor="middle" fill="#d1fbf2" font-size="18"># ${esc(
       channel.displayName.slice(0, 10)
@@ -667,12 +680,17 @@ function renderGraph() {
       html += agentNode(entry, true);
     });
     svg.setAttribute('viewBox', '0 0 900 620');
+    $('#graph-coordinate-right').innerHTML =
+      `${esc(channel.displayName)}<br><span>${members.length} 个参与智能体</span>`;
   } else {
     html += '<text x="450" y="220" text-anchor="middle" fill="#6f959f" font-size="12">暂无频道数据</text>';
     svg.setAttribute('viewBox', '0 0 900 440');
   }
 
   svg.innerHTML = `<title>系统频道与智能体逻辑拓扑</title>${GRAPH_DEFS}<g id="graph-camera">${html}</g>`;
+  // Membership is not proof of a message delivery or its direction.
+  if (state.mode !== 'demo') $$('[marker-end]', svg).forEach((path) => path.removeAttribute('marker-end'));
+  $('.legend-flow').innerHTML = '<i></i>' + (state.mode === 'demo' ? '演示流转' : '成员关系');
   svg.classList.toggle('paused', state.paused);
   updateZoom();
   syncMotion();
@@ -732,6 +750,8 @@ function renderSummary() {
   if (!channel) {
     container.innerHTML =
       '<div class="loading-state"><strong>尚无频道</strong>该工作空间没有可见频道，或当前凭据无权查看。</div>';
+    $('#agent-count').textContent = '0';
+    $('#breadcrumb-current').textContent = '系统总览';
     return;
   }
   const cls = channelClass(channel);
@@ -835,6 +855,9 @@ function messageArticle(message) {
 function renderMessages() {
   const timeline = $('#message-timeline');
   const channel = currentChannel();
+  $('#message-count').textContent = String((state.messages.get(state.channel) || []).length);
+  $('#message-scope').textContent = state.loadingMessages ? '正在读取消息…' : '仅筛选已加载消息';
+  timeline.setAttribute('aria-busy', String(state.loadingMessages));
 
   if (!channel) {
     timeline.innerHTML =
@@ -861,6 +884,7 @@ function renderMessages() {
   const list = visibleMessages();
   const all = state.messages.get(channel.name) || [];
   $('#message-count').textContent = String(all.length);
+  $('#message-scope').textContent = `已加载 ${all.length} 条 · 匹配 ${list.length} 条`;
 
   let day = '';
   timeline.innerHTML = list.length
@@ -894,8 +918,16 @@ function renderMessages() {
 
 async function loadMessages({ reset = false } = {}) {
   const channel = currentChannel();
-  if (!channel || state.loadingMessages) return;
+  if (!channel || (state.loadingMessages && !reset)) return;
+  state.messageAbort?.abort();
+  const controller = new AbortController();
+  state.messageAbort = controller;
+  const request = ++state.messageRequest;
   const name = channel.name;
+  const timeline = $('#message-timeline');
+  const scrollTop = timeline.scrollTop;
+  // Live messages received during the request must survive the HTTP snapshot.
+  const beforeRequest = new Set((state.messages.get(name) || []).map((message) => message.id));
   state.loadingMessages = true;
   state.messageError = null;
   renderMessages();
@@ -903,13 +935,15 @@ async function loadMessages({ reset = false } = {}) {
     const page = await window.RelayApi.messages(name, {
       limit: 40,
       before: reset ? undefined : state.nextBefore || undefined,
+      signal: controller.signal,
     });
     // A late response for a channel the operator already left must not apply.
-    if (!reset && state.channel !== name) return;
-    const existing = reset ? [] : state.messages.get(name) || [];
+    if (request !== state.messageRequest || state.channel !== name) return;
+    const current = state.messages.get(name) || [];
+    const existing = reset ? current.filter((message) => !beforeRequest.has(message.id)) : current;
     const merged = new Map();
-    for (const message of existing) merged.set(message.id, message);
     for (const message of page.messages) merged.set(message.id, message);
+    for (const message of existing) merged.set(message.id, message);
     state.messages.set(
       name,
       [...merged.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
@@ -919,12 +953,15 @@ async function loadMessages({ reset = false } = {}) {
       state.nextBefore = page.nextBefore;
     }
   } catch (error) {
-    if (state.channel === name) state.messageError = error.message || '读取消息失败';
+    if (request === state.messageRequest && state.channel === name && error.name !== 'AbortError') {
+      state.messageError = error.message || '读取消息失败';
+    }
   } finally {
-    state.loadingMessages = false;
-    if (state.channel === name) {
+    if (request === state.messageRequest && state.channel === name) {
+      state.loadingMessages = false;
       renderSenders();
       renderMessages();
+      timeline.scrollTop = reset ? 0 : scrollTop;
     }
   }
 }
@@ -954,7 +991,12 @@ function renderAgents() {
             )}</span><span>${esc(agent.onlineLabel)}</span></div>${
               selected
                 ? `<div class="agent-note">所属频道：${
-                    agent.channelNames.map((name) => `#${esc(name)}`).join('、') || '未报告'
+                    agent.channelNames
+                      .map(
+                        (name) =>
+                          `#${esc(state.channels.find((entry) => entry.name === name)?.displayName || name)}`
+                      )
+                      .join('、') || '未报告'
                   }<br>工作状态依据：${esc(evidenceLabel(agent.evidence))}<br>最近活动：${esc(
                     relative(agent.lastActivityAt || agent.lastSeenAt)
                   )}${agent.reason ? `<br><span class="agent-note-warn">原因：${esc(agent.reason)}</span>` : ''}</div>`
@@ -970,19 +1012,28 @@ function renderAgents() {
 /* -------------------------------------------------------------- connection */
 
 function renderConnection() {
-  const connection = state.connection || {
+  const sourceConnection = state.connection || {
     state: 'connecting',
     label: '正在连接…',
     detail: '',
     mode: state.mode,
   };
+  const connection = state.streamFailed
+    ? {
+        ...sourceConnection,
+        state: 'reconnecting',
+        label: '重连中',
+        detail: '浏览器与本地服务的实时连接已中断，正在自动重试',
+      }
+    : sourceConnection;
   const chip = $('#connection-chip');
   const chipText = $('#connection-chip-text');
   chip.dataset.state = connection.state;
   chip.dataset.mode = state.mode;
   // The source already names itself (`演示数据 · 实时` vs `已连接 · 实时`), so the
   // chip never stacks two mode prefixes on top of each other.
-  chipText.textContent = connection.label;
+  chipText.textContent = state.paused ? '观察已暂停' : connection.label;
+  if (state.paused) chip.dataset.state = 'paused';
 
   const degraded = UNREADABLE_CHANNEL_STATES.has(connection.state);
   const bar = $('#connection-bar');
@@ -1042,7 +1093,14 @@ function onLiveMessage(message) {
     state.dropped += 1;
     return;
   }
-  const list = state.messages.get(message.channel);
+  let list = state.messages.get(message.channel);
+  if (!list && message.channel === state.channel && state.loadingMessages) {
+    list = [];
+    state.messages.set(message.channel, list);
+  }
+  const duplicate = state.seenMessages.has(message.id) || Boolean(findMessage(message.id));
+  state.seenMessages.add(message.id);
+  if (state.seenMessages.size > 2000) state.seenMessages.delete(state.seenMessages.values().next().value);
   if (list) {
     const index = list.findIndex((entry) => entry.id === message.id);
     if (index >= 0) list[index] = message;
@@ -1057,7 +1115,7 @@ function onLiveMessage(message) {
 
   const channel = state.channels.find((entry) => entry.name === message.channel);
   if (channel) channel.lastMessageAt = message.createdAt;
-  if (state.metrics && message.day === todayDay() && state.metrics.messagesToday !== null) {
+  if (!duplicate && state.metrics && message.day === todayDay() && state.metrics.messagesToday !== null) {
     state.metrics.messagesToday += 1;
     renderMetrics();
   }
@@ -1075,8 +1133,10 @@ function onLiveMessage(message) {
     renderMessages();
     $(`[data-message-id="${cssEscape(message.id)}"]`)?.classList.add('new-message');
   } else {
-    state.pending += 1;
-    showPendingButton();
+    if (!duplicate) {
+      state.pending += 1;
+      showPendingButton();
+    }
   }
   tickClock();
 }
@@ -1094,6 +1154,7 @@ function showPendingButton() {
     button.type = 'button';
     button.onclick = () => {
       const timeline = $('#message-timeline');
+      renderSenders();
       renderMessages();
       timeline.scrollTop = 0;
       state.pending = 0;
@@ -1114,9 +1175,18 @@ function applyAgentsFrame(frame) {
   state.metrics = frame.metrics || state.metrics;
   state.connection = frame.connection || state.connection;
   if (!state.channels.some((channel) => channel.name === state.channel)) {
-    const next = state.channels[0];
-    state.channel = next ? next.name : null;
-    state.agent = null;
+    const next = state.channels.find((channel) => !channel.archived) || state.channels[0];
+    if (next) selectChannel(next.name);
+    else {
+      state.messageAbort?.abort();
+      state.messageRequest += 1;
+      state.loadingMessages = false;
+      state.channel = null;
+      state.agent = null;
+      state.pending = 0;
+      $('#pending-messages')?.remove();
+      renderMessages();
+    }
   }
   renderChannels();
   renderMetrics();
@@ -1143,7 +1213,8 @@ function onFrame(name, payload) {
     return;
   }
   if (name === 'bootstrap') {
-    applyBootstrap(payload.bootstrap);
+    if (state.paused) state.dropped += 1;
+    else applyBootstrap(payload.bootstrap);
   }
 }
 
@@ -1152,8 +1223,15 @@ function openStream() {
   state.stream = window.RelayApi.stream({
     onFrame,
     onStatus(status) {
+      const reconnecting = state.streamFailed;
       state.streamOpen = status === 'open';
-      if (status === 'open' && state.connection && UNREADABLE_CHANNEL_STATES.has(state.connection.state)) {
+      state.streamFailed = status === 'error';
+      renderConnection();
+      if (
+        status === 'open' &&
+        !state.paused &&
+        (reconnecting || (state.connection && UNREADABLE_CHANNEL_STATES.has(state.connection.state)))
+      ) {
         // The socket came back: re-read rather than trusting the gap.
         void refreshAll({ reason: 'reconnect' });
       }
@@ -1162,19 +1240,28 @@ function openStream() {
 }
 
 async function refreshAll({ reason = 'manual' } = {}) {
-  if (state.bootstrapping) return;
+  if (state.bootstrapping || state.paused) return;
   state.bootstrapping = true;
   try {
     const data = await window.RelayApi.bootstrap();
+    if (state.paused) return;
     const dropped = state.dropped;
     state.dropped = 0;
     applyBootstrap(data);
+    if (!state.stream) openStream();
     if (reason === 'resume' && dropped > 0) {
       toast(`已重新读取：暂停期间的 ${dropped} 个事件未逐条回放`);
     } else if (reason === 'reconnect') {
       toast('连接已恢复，已重新读取最新状态');
     }
   } catch (error) {
+    state.connection = {
+      ...state.connection,
+      state: 'degraded',
+      label: '刷新失败',
+      detail: error.message || '无法读取最新工作空间数据',
+    };
+    renderConnection();
     toast(error.message || '刷新失败');
   } finally {
     state.bootstrapping = false;
@@ -1189,11 +1276,8 @@ async function togglePause() {
   renderConnection();
   $('#network').classList.toggle('paused', state.paused);
   syncMotion();
-  try {
-    await window.RelayApi.pause(state.paused);
-  } catch {
-    toast('本地暂停已生效，但服务端未确认');
-  }
+  // Pause belongs to this browser. Pausing the shared source would freeze all
+  // observers and prevent other windows from receiving messages.
   if (!state.paused) {
     const dropped = state.dropped;
     await refreshAll({ reason: 'resume' });

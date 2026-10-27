@@ -37,7 +37,10 @@ window.RelayApi = (() => {
       if (options.q) params.set('q', options.q);
       if (options.from) params.set('from', options.from);
       if (options.day) params.set('day', options.day);
-      return request(`/api/channels/${encodeURIComponent(channel)}/messages?${params.toString()}`);
+      return request(
+        `/api/channels/${encodeURIComponent(channel)}/messages?${params.toString()}`,
+        options.signal ? { signal: options.signal } : {}
+      );
     },
 
     message(id) {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DemoControlRoomSource } from '../demo-source.js';
-import { startControlRoom, type ControlRoomServer } from '../server.js';
+import type { ControlRoomServer } from '../server.js';
+import { startHttpTestServer } from './http-test-server.js';
 
 const FIXED = Date.parse('2026-10-26T06:32:08Z');
 let server: ControlRoomServer | null = null;
@@ -9,7 +10,7 @@ let source: DemoControlRoomSource | null = null;
 
 async function start(): Promise<ControlRoomServer> {
   source = new DemoControlRoomSource({ now: () => FIXED, tickMs: 60_000 });
-  server = await startControlRoom({ source, port: 0, log: () => {} });
+  server = await startHttpTestServer({ source, log: () => {} });
   return server;
 }
 

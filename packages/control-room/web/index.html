@@ -80,7 +80,7 @@
             </button>
           </div>
         </header>
-        <div class="connection-bar" id="connection-bar" hidden>
+        <div class="connection-bar" id="connection-bar" role="status" hidden>
           <span data-icon="triangle-alert"></span><span id="connection-bar-text"></span
           ><button class="button" id="connection-retry" type="button">重新连接</button>
         </div>
@@ -156,7 +156,7 @@
                 <button data-view="global" class="active" aria-pressed="true">全局拓扑</button
                 ><button data-view="channel" aria-pressed="false">频道聚焦</button>
               </div>
-              <span class="graph-hint"><span data-icon="mouse-pointer-2"></span>点击节点，追踪协作</span>
+              <span class="graph-hint"><span data-icon="mouse-pointer-2"></span>选择频道，展开参与节点</span>
             </div>
             <div class="graph-stage" id="graph-stage">
               <div class="graph-coordinate top-left" id="graph-coordinate-left">
@@ -238,7 +238,7 @@
                   ><input
                     id="message-search"
                     type="search"
-                    placeholder="搜索消息内容或发送者"
+                    placeholder="搜索已加载消息、发送者或接收对象"
                     aria-label="搜索频道消息"
                 /></label>
                 <div class="message-filters">
@@ -256,6 +256,7 @@
                     </select></label
                   >
                 </div>
+                <p class="message-scope" id="message-scope" role="status">仅筛选已加载消息</p>
               </div>
               <div id="message-timeline" class="message-timeline"></div>
               <button class="load-more" id="load-more" type="button" hidden>加载更早的消息</button>

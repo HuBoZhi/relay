@@ -15,7 +15,8 @@ import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DemoControlRoomSource } from '../demo-source.js';
-import { startControlRoom, type ControlRoomServer } from '../server.js';
+import type { ControlRoomServer } from '../server.js';
+import { startHttpTestServer } from './http-test-server.js';
 import type { BootstrapView, ControlRoomSource, MessagePageView } from '../types.js';
 
 const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'web');
@@ -35,6 +36,8 @@ async function render(baseUrl: string): Promise<Rendered> {
   const base = baseUrl;
   window.fetch = ((input: string | URL, init?: RequestInit) =>
     fetch(new URL(String(input), base), init)) as never;
+  // Node fetch and its abort signal must use the same realm in this harness.
+  window.AbortController = AbortController as never;
   window.matchMedia = (() => ({
     matches: false,
     addEventListener() {},
@@ -90,7 +93,7 @@ describe('control room renderer', () => {
 
   it('renders channels, metrics, topology, and messages from demo data', async () => {
     source = new DemoControlRoomSource({ tickMs: 600_000 });
-    server = await startControlRoom({ source, port: 0, log: () => {} });
+    server = await startHttpTestServer({ source, log: () => {} });
     view = await render(server.url);
 
     expect(view.count('#channel-list [data-channel]')).toBe(8);
@@ -99,7 +102,8 @@ describe('control room renderer', () => {
     expect(view.text('#metric-channels-working')).toMatch(/^\d+$/);
     expect(view.text('#metric-agents-running')).toMatch(/^\d+$/);
     expect(view.count('#network [data-graph-channel]')).toBe(8);
-    expect(view.count('#network [data-graph-agent]')).toBeGreaterThan(10);
+    // The global map expands members only for the selected channel.
+    expect(view.count('#network [data-graph-agent]')).toBe(Number(view.text('#agent-count')));
     expect(view.count('#traffic-chart i')).toBe(12);
     expect(view.count('#recent-activity [data-activity-message]')).toBeGreaterThan(0);
 
@@ -109,7 +113,7 @@ describe('control room renderer', () => {
     expect(view.text('.state-evidence')).toContain('依据');
 
     const messages = view.count('#message-timeline .message');
-    expect(messages).toBeGreaterThan(0);
+    expect(messages, view.text('#message-timeline')).toBeGreaterThan(0);
     expect(view.text('#message-timeline .message-meta time')).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     expect(view.text('.message-read')).toMatch(/已读|读取状态未知|已入队/);
     expect(view.text('#connection-chip-text')).toContain('演示数据');
@@ -182,7 +186,7 @@ describe('control room renderer', () => {
       async close() {},
     } as ControlRoomSource;
 
-    server = await startControlRoom({ source, port: 0, log: () => {} });
+    server = await startHttpTestServer({ source, log: () => {} });
     view = await render(server.url);
 
     expect(view.text('#connection-chip-text')).not.toContain('实时');
