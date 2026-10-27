@@ -26,6 +26,14 @@ git push origin main  # NO!
 
 This ensures the user maintains control over what goes into the main branch.
 
+## 每个最小可执行任务完成后提交并推送（用户要求，2026-10-27）
+
+- 每完成一个可独立执行、验证的最小任务，就立即提交并推送一次，不积攒到多个任务完成后再统一提交。
+- 提交前完成该任务必要的验证，只暂存与该任务相关的代码、文档和验收记录，不夹带其他任务或用户的未提交改动。
+- 提交后推送到当前功能分支对应的远程分支，并核实推送成功；向用户报告提交标识、分支和验证结果。无需每次重新请求提交或推送许可。
+- 推送失败时保留本地提交，解决可自行处理的问题后重试；无法解决时明确报告阻塞原因，不声称已推送。
+- 本规则不授权直接推送或合并到 main，也不授权发布包或创建正式版本；继续遵守上述功能分支规则与发布审批要求。
+
 ## Changelog
 
 Curate `[Unreleased]` in `CHANGELOG.md` as you land PRs. The root changelog is
