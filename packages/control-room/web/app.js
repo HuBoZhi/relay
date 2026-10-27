@@ -1610,9 +1610,136 @@ document.onkeydown = (event) => {
   }
 };
 
+/* ------------------------------------------------------- desktop menu bar */
+
+/**
+ * The desktop shell hides the native title bar and hands the page its menu.
+ * In a browser `window.relayDesktop` does not exist, so none of this runs and
+ * the bar keeps its web layout.
+ */
+async function mountDesktopMenu() {
+  const bridge = window.relayDesktop;
+  if (!bridge || typeof bridge.menu !== 'function') return;
+
+  document.documentElement.classList.add('is-desktop');
+  if (bridge.platform) document.documentElement.classList.add(`is-${bridge.platform}`);
+
+  let groups = [];
+  try {
+    groups = await bridge.menu();
+  } catch {
+    return;
+  }
+  if (!Array.isArray(groups) || groups.length === 0) return;
+
+  const nav = $('#app-menu');
+  const divider = $('#topbar-divider');
+  let openIndex = -1;
+
+  nav.innerHTML = groups
+    .map(
+      (group, index) => `
+      <div class="app-menu__group">
+        <button
+          class="app-menu__trigger"
+          type="button"
+          role="menuitem"
+          aria-haspopup="true"
+          aria-expanded="false"
+          data-menu-trigger="${index}"
+        >${esc(group.label)}</button>
+        <div class="app-menu__panel" role="menu" aria-label="${esc(group.label)}" data-menu-panel="${index}" hidden>
+          ${group.items
+            .map((item) =>
+              item.type === 'separator'
+                ? '<div class="app-menu__sep" role="separator"></div>'
+                : `<button class="app-menu__item" type="button" role="menuitem" data-menu-action="${esc(item.id)}">${esc(item.label)}</button>`
+            )
+            .join('')}
+        </div>
+      </div>`
+    )
+    .join('');
+  nav.hidden = false;
+  divider.hidden = false;
+
+  const triggers = $$('[data-menu-trigger]', nav);
+  const panels = $$('[data-menu-panel]', nav);
+
+  const closeMenu = (restoreFocus = false) => {
+    if (openIndex < 0) return;
+    const index = openIndex;
+    openIndex = -1;
+    panels[index].hidden = true;
+    triggers[index].setAttribute('aria-expanded', 'false');
+    if (restoreFocus) triggers[index].focus();
+  };
+
+  const openMenu = (index) => {
+    if (index === openIndex) return;
+    if (openIndex >= 0) {
+      panels[openIndex].hidden = true;
+      triggers[openIndex].setAttribute('aria-expanded', 'false');
+    }
+    openIndex = index;
+    panels[index].hidden = false;
+    triggers[index].setAttribute('aria-expanded', 'true');
+  };
+
+  triggers.forEach((trigger, index) => {
+    trigger.onclick = (event) => {
+      event.stopPropagation();
+      if (openIndex === index) closeMenu();
+      else openMenu(index);
+    };
+    // Once a group is open, hovering another switches to it like a real menu bar.
+    trigger.onmouseenter = () => {
+      if (openIndex >= 0 && openIndex !== index) openMenu(index);
+    };
+  });
+
+  panels.forEach((panel) => {
+    panel.onclick = (event) => {
+      const action = event.target.closest('[data-menu-action]');
+      if (!action) return;
+      closeMenu();
+      Promise.resolve(bridge.run(action.dataset.menuAction)).catch(() => {
+        toast('这个操作暂时不可用');
+      });
+    };
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!nav.contains(event.target)) closeMenu();
+  });
+
+  nav.onkeydown = (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowDown', 'Escape'].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'Escape') {
+      closeMenu(true);
+      return;
+    }
+    if (openIndex < 0) {
+      openMenu(0);
+      triggers[0].focus();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      panels[openIndex].querySelector('[data-menu-action]')?.focus();
+      return;
+    }
+    const step = event.key === 'ArrowRight' ? 1 : -1;
+    const next = (openIndex + step + triggers.length) % triggers.length;
+    openMenu(next);
+    triggers[next].focus();
+  };
+}
+
 /* -------------------------------------------------------------------- init */
 
 renderLiveToggle();
 tickClock();
+void mountDesktopMenu();
 setInterval(tickClock, 1000);
 void boot();

@@ -11,6 +11,7 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./room.css" />
+    <link rel="stylesheet" href="./desktop.css" />
     <title>协作控制中心 · Relay</title>
   </head>
   <body>
@@ -65,8 +66,12 @@
       </aside>
       <main class="main-shell">
         <header class="topbar">
-          <div class="breadcrumb">
-            工作空间<span>/</span><strong id="breadcrumb-current">系统总览</strong>
+          <div class="topbar-left">
+            <nav class="app-menu" id="app-menu" role="menubar" aria-label="应用菜单" hidden></nav>
+            <span class="topbar-divider" id="topbar-divider" aria-hidden="true" hidden></span>
+            <div class="breadcrumb">
+              工作空间<span>/</span><strong id="breadcrumb-current">系统总览</strong>
+            </div>
           </div>
           <div class="topbar-right">
             <span class="demo-label" id="connection-chip"

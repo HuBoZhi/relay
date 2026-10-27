@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { MENU_ACTIONS, buildAppMenu, menuActionIds } from '../lib/app-menu.mjs';
 import { DEFAULT_PORT, resolveConfig } from '../lib/config.mjs';
 import { buildTrayMenu, formatUpdatedAt, summarize, trayTooltip } from '../lib/tray-menu.mjs';
 
@@ -160,5 +161,33 @@ describe('formatUpdatedAt', () => {
 
   it('never throws on an unreadable clock', () => {
     expect(formatUpdatedAt('not-a-date')).toBe('--:--:--');
+  });
+});
+
+describe('buildAppMenu', () => {
+  const menu = buildAppMenu({ isPackaged: true });
+
+  it('keeps the four groups the native menu used to have', () => {
+    expect(menu.map((group) => group.label)).toEqual(['控制中心', '视图', '窗口', '帮助']);
+  });
+
+  it('names every entry in Chinese', () => {
+    for (const group of menu) {
+      expect(group.label, group.label).not.toMatch(/[A-Za-z]/);
+      for (const item of group.items) {
+        if (item.type === 'separator') continue;
+        expect(item.label, item.label).not.toMatch(/[A-Za-z]/);
+      }
+    }
+  });
+
+  it('hides developer tools from packaged builds', () => {
+    const ids = menuActionIds(menu);
+    expect(ids).not.toContain('devtools');
+    expect(menuActionIds(buildAppMenu({ isPackaged: false }))).toContain('devtools');
+  });
+
+  it('only emits actions the shell can run', () => {
+    for (const id of menuActionIds(menu)) expect(MENU_ACTIONS, id).toContain(id);
   });
 });

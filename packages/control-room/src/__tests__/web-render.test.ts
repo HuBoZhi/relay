@@ -29,7 +29,12 @@ interface Rendered {
   close(): void;
 }
 
-async function render(baseUrl: string): Promise<Rendered> {
+interface RenderOptions {
+  /** Pretend the page is hosted by the desktop shell and expose its bridge. */
+  desktop?: { menu: unknown[]; calls?: string[] };
+}
+
+async function render(baseUrl: string, options: RenderOptions = {}): Promise<Rendered> {
   const html = await (await fetch(`${baseUrl}/`)).text();
   const dom = new JSDOM(html, { url: `${baseUrl}/`, runScripts: 'outside-only', pretendToBeVisual: true });
   const { window } = dom;
@@ -51,6 +56,18 @@ async function render(baseUrl: string): Promise<Rendered> {
     onerror: unknown = null;
   } as never;
   (window.HTMLElement.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
+
+  if (options.desktop) {
+    const calls = options.desktop.calls ?? [];
+    window.relayDesktop = {
+      platform: 'win32',
+      menu: async () => options.desktop?.menu ?? [],
+      run: async (id: string) => {
+        calls.push(id);
+        return true;
+      },
+    } as never;
+  }
 
   for (const file of ['icons.js', 'api.js', 'app.js']) {
     window.eval(readFileSync(resolve(WEB_ROOT, file), 'utf8'));
@@ -173,6 +190,50 @@ describe('control room renderer', () => {
     view.click('[data-view="channel"]');
     await new Promise((settle) => setTimeout(settle, 300));
     expect(latin()).toEqual([]);
+  }, 20_000);
+
+  it('renders the shell menu bar only when the desktop bridge exists', async () => {
+    const calls: string[] = [];
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url, {
+      desktop: {
+        calls,
+        menu: [
+          {
+            label: '控制中心',
+            items: [
+              { id: 'copy-url', label: '复制访问地址' },
+              { type: 'separator' },
+              { id: 'quit', label: '退出' },
+            ],
+          },
+          { label: '帮助', items: [{ id: 'about', label: '关于' }] },
+        ],
+      },
+    });
+    await new Promise((settle) => setTimeout(settle, 300));
+
+    expect(view.window.document.documentElement.classList.contains('is-desktop')).toBe(true);
+    expect(view.window.document.querySelector('#app-menu')?.hasAttribute('hidden')).toBe(false);
+    expect(view.count('[data-menu-trigger]')).toBe(2);
+    expect(view.text('[data-menu-trigger="0"]')).toBe('控制中心');
+
+    // Opening a group, then choosing an entry, runs the shell action.
+    view.click('[data-menu-trigger="0"]');
+    expect(view.window.document.querySelector('[data-menu-panel="0"]')?.hasAttribute('hidden')).toBe(false);
+    view.click('[data-menu-action="copy-url"]');
+    await new Promise((settle) => setTimeout(settle, 50));
+    expect(calls).toEqual(['copy-url']);
+    expect(view.window.document.querySelector('[data-menu-panel="0"]')?.hasAttribute('hidden')).toBe(true);
+  }, 20_000);
+
+  it('hides the shell menu bar in a plain browser', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    expect(view.window.document.documentElement.classList.contains('is-desktop')).toBe(false);
+    expect(view.window.document.querySelector('#app-menu')?.hasAttribute('hidden')).toBe(true);
   }, 20_000);
 
   it('does not present an unreachable workspace as healthy', async () => {

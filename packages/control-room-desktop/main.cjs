@@ -16,12 +16,24 @@ const { join } = require('node:path');
 const { writeSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
-const { app, BrowserWindow, Menu, Tray, clipboard, dialog, nativeImage, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  clipboard,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell,
+} = require('electron');
 
 const APP_ROOT = __dirname;
 const ICON = join(APP_ROOT, 'assets', 'icon.png');
 const TRAY_ICON = join(APP_ROOT, 'assets', 'tray.png');
 const STATUS_INTERVAL_MS = 10_000;
+/** Height of the in-page menu bar; the OS caption buttons are drawn over it. */
+const TOPBAR_HEIGHT = 61;
 
 // Filled by `start()` before any window or tray exists.
 let config = null;
@@ -29,6 +41,8 @@ let buildTrayMenu = null;
 let trayTooltip = null;
 let startRoom = null;
 let probe = null;
+let appMenuModel = [];
+let MENU_ACTIONS = new Set();
 
 let room = null;
 let win = null;
@@ -59,11 +73,14 @@ function say(line) {
 }
 
 async function loadHelpers() {
-  const [configModule, roomModule, trayModule] = await Promise.all([
+  const [configModule, roomModule, trayModule, menuModule] = await Promise.all([
     import('./lib/config.mjs'),
     import('./lib/room-service.mjs'),
     import('./lib/tray-menu.mjs'),
+    import('./lib/app-menu.mjs'),
   ]);
+  MENU_ACTIONS = new Set(menuModule.MENU_ACTIONS);
+  appMenuModel = menuModule.buildAppMenu({ isPackaged: app.isPackaged });
   buildTrayMenu = trayModule.buildTrayMenu;
   trayTooltip = trayModule.trayTooltip;
   startRoom = roomModule.startRoom;
@@ -91,7 +108,17 @@ async function createWindow() {
     title: '协作控制中心',
     icon: ICON,
     show: false,
+    // A light native title bar plus its grey menu strip looked bolted onto a
+    // graphite console. Hide the frame, keep the OS caption buttons, and draw
+    // both the title and the menu inside the page.
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { color: '#0b1015', symbolColor: '#c6d3dc', height: TOPBAR_HEIGHT },
+        }
+      : {}),
     webPreferences: {
+      preload: join(APP_ROOT, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -217,102 +244,123 @@ async function refreshStatus() {
   updateTray();
 }
 
-function buildAppMenu() {
-  const template = [
-    {
-      label: '控制中心',
-      submenu: [
-        { label: '打开窗口', accelerator: 'CmdOrCtrl+O', click: showWindow },
-        {
-          label: '复制访问地址',
-          click: () => {
-            if (room) clipboard.writeText(room.url);
-          },
-        },
-        { type: 'separator' },
-        {
-          label: '退出',
-          accelerator: 'CmdOrCtrl+Q',
-          click: () => {
-            quitting = true;
-            app.quit();
-          },
-        },
-      ],
-    },
-    {
-      label: '视图',
-      submenu: [
-        { role: 'reload', label: '重新加载' },
-        { role: 'forceReload', label: '强制重新加载' },
-        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools', label: '开发者工具' }]),
-        { type: 'separator' },
-        { role: 'resetZoom', label: '实际大小' },
-        { role: 'zoomIn', label: '放大' },
-        { role: 'zoomOut', label: '缩小' },
-        { type: 'separator' },
-        { role: 'togglefullscreen', label: '全屏' },
-      ],
-    },
-    {
-      label: '窗口',
-      submenu: [
-        {
-          label: '最小化到托盘',
-          click: () => {
-            if (win && !win.isDestroyed()) win.hide();
-          },
-        },
-        { role: 'minimize', label: '最小化' },
-        {
-          label: '关闭窗口',
-          click: () => {
-            if (win && !win.isDestroyed()) win.close();
-          },
-        },
-      ],
-    },
-    {
-      label: '帮助',
-      submenu: [
-        {
-          label: '状态说明',
-          click: () => {
-            void dialog.showMessageBox({
-              type: 'info',
-              title: '状态说明',
-              message: '托盘里显示的是什么',
-              detail: [
-                '运行模式：演示数据表示没有配置只读令牌；只读观察表示正在读取真实工作空间。',
-                '数据连接：取自控制中心自己的连接状态，与界面右上角一致。',
-                '工作空间与今日消息：来自最近一次读取，每 10 秒刷新一次。',
-                '只读观察不会发送消息，也不影响智能体运行。',
-              ].join('\n'),
-              buttons: ['知道了'],
-              noLink: true,
-            });
-          },
-        },
-        {
-          label: '关于',
-          click: () => {
-            void dialog.showMessageBox({
-              type: 'info',
-              title: '关于协作控制中心',
-              message: '协作控制中心',
-              detail:
-                `版本 ${app.getVersion()}\n` +
-                '只读观察工作空间中的频道、智能体工作状态与消息流转。\n' +
-                '凭据只保存在本进程内，不会发送到浏览器。',
-              buttons: ['知道了'],
-              noLink: true,
-            });
-          },
-        },
-      ],
-    },
-  ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+function showStatusHelp() {
+  void dialog.showMessageBox({
+    type: 'info',
+    title: '状态说明',
+    message: '托盘里显示的是什么',
+    detail: [
+      '运行模式：演示数据表示没有配置只读令牌；只读观察表示正在读取真实工作空间。',
+      '数据连接：取自控制中心自己的连接状态，与界面右上角一致。',
+      '工作空间与今日消息：来自最近一次读取，每 10 秒刷新一次。',
+      '只读观察不会发送消息，也不影响智能体运行。',
+    ].join('\n'),
+    buttons: ['知道了'],
+    noLink: true,
+  });
+}
+
+function showAbout() {
+  void dialog.showMessageBox({
+    type: 'info',
+    title: '关于协作控制中心',
+    message: '协作控制中心',
+    detail:
+      `版本 ${app.getVersion()}\n` +
+      '只读观察工作空间中的频道、智能体工作状态与消息流转。\n' +
+      '凭据只保存在本进程内，不会发送到浏览器。',
+    buttons: ['知道了'],
+    noLink: true,
+  });
+}
+
+function webContents() {
+  return win && !win.isDestroyed() ? win.webContents : null;
+}
+
+function zoomBy(delta) {
+  const contents = webContents();
+  if (!contents) return;
+  const next = Math.min(5, Math.max(-3, contents.getZoomLevel() + delta));
+  contents.setZoomLevel(next);
+}
+
+/** The menu lives in the page, so the shell only exposes named actions. */
+const MENU_HANDLERS = {
+  'copy-url': () => {
+    if (room) clipboard.writeText(room.url);
+  },
+  'open-browser': () => {
+    if (room) void shell.openExternal(room.url);
+  },
+  quit: () => {
+    quitting = true;
+    app.quit();
+  },
+  reload: () => {
+    const contents = webContents();
+    if (contents) contents.reload();
+  },
+  'zoom-reset': () => {
+    const contents = webContents();
+    if (contents) contents.setZoomLevel(0);
+  },
+  'zoom-in': () => zoomBy(0.5),
+  'zoom-out': () => zoomBy(-0.5),
+  fullscreen: () => {
+    if (win && !win.isDestroyed()) win.setFullScreen(!win.isFullScreen());
+  },
+  'hide-to-tray': () => {
+    if (win && !win.isDestroyed()) win.hide();
+  },
+  minimize: () => {
+    if (win && !win.isDestroyed()) win.minimize();
+  },
+  'close-window': () => {
+    if (win && !win.isDestroyed()) win.close();
+  },
+  'status-help': showStatusHelp,
+  about: showAbout,
+  devtools: () => {
+    const contents = webContents();
+    if (contents && !app.isPackaged) contents.toggleDevTools();
+  },
+};
+
+function runMenuAction(id) {
+  if (!MENU_ACTIONS.has(id)) return false;
+  const handler = MENU_HANDLERS[id];
+  if (!handler) return false;
+  handler();
+  return true;
+}
+
+function registerIpc() {
+  ipcMain.handle('desktop:menu', () => appMenuModel);
+  ipcMain.handle('desktop:run', (_event, id) => runMenuAction(String(id)));
+}
+
+/** The menu bar is drawn in the page, so its shortcuts are bound here. */
+function registerShortcuts() {
+  const contents = webContents();
+  if (!contents) return;
+  contents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const key = input.key.length === 1 ? input.key.toLowerCase() : input.key;
+    const ctrl = input.control || input.meta;
+    let action = null;
+    if (key === 'F5' || (ctrl && key === 'r')) action = 'reload';
+    else if (key === 'F11') action = 'fullscreen';
+    else if (ctrl && key === 'q') action = 'quit';
+    else if (ctrl && key === 'w') action = 'close-window';
+    else if (ctrl && key === '0') action = 'zoom-reset';
+    else if (ctrl && (key === '=' || key === '+')) action = 'zoom-in';
+    else if (ctrl && key === '-') action = 'zoom-out';
+    else if (ctrl && input.shift && key === 'i') action = 'devtools';
+    if (!action) return;
+    event.preventDefault();
+    runMenuAction(action);
+  });
 }
 
 async function start() {
@@ -336,8 +384,11 @@ async function start() {
   }
 
   console.log(`[控制中心] 已启动 ${room.url} · ${room.mode}`);
-  buildAppMenu();
+  // No native menu bar: the page renders the menu in the console's own style.
+  Menu.setApplicationMenu(null);
+  registerIpc();
   await createWindow();
+  registerShortcuts();
 
   const image = nativeImage.createFromPath(TRAY_ICON);
   tray = new Tray(image.isEmpty() ? nativeImage.createFromPath(ICON) : image);

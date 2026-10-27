@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@agent-relay/control-room-desktop`: the window drops the native title bar and menu. The menu (控制中心 / 视图 / 窗口 / 帮助) is drawn inside the console's top bar, the OS caption buttons are themed to match, and shortcuts (F5, F11, Ctrl+Q/W, Ctrl+0/±) still work.
+
 - `@agent-relay/control-room`: the console now reads Chinese end to end. Transport failures (`fetch failed`, `ECONNREFUSED`, HTTP status codes) render as Chinese captions instead of raw English, the workspace badge names the mode in Chinese, and message/thread identifiers no longer appear in the reader.
 
 ### Removed

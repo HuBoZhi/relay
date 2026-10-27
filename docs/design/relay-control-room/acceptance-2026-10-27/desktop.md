@@ -25,6 +25,25 @@
 
 ![桌面窗口](desktop-window.png)
 
+### 菜单展开
+
+![菜单](desktop-menu.png)
+
+## 二、菜单栏重做
+
+原生菜单栏是 Windows 画的浅灰条，跟着系统主题走，压不住深色界面；标题栏也一样。现在：
+
+- 隐藏系统标题栏（`titleBarStyle: hidden` + `titleBarOverlay`，底色 `#0b1015`、按钮 `#c6d3dc`、高度 61 与顶栏等高），
+  只保留系统的最小化 / 最大化 / 关闭按钮。
+- 原生菜单整体去掉（`Menu.setApplicationMenu(null)`），四组菜单画在页面顶栏里，与面包屑同一行，
+  字号 11.5px、青色悬停、深色下拉面板，带指向触发项的小缺口。
+- 交互对齐常规菜单栏：点击展开、已展开时悬停其它分组即切换、点空白或 Esc 收起、
+  左右方向键切分组、方向键下进入条目；`menubar` / `menu` / `menuitem` 角色与 `aria-expanded` 齐备。
+- 面板与顶栏都在浏览器里不出现：只有 `preload.cjs` 注入 `window.relayDesktop` 时页面才挂载菜单，
+  网页版布局与之前逐像素一致（渲染测试同时断言「有桥接才显示、无桥接不显示」）。
+- 顶栏是拖动区（`-webkit-app-region: drag`），右侧留 152px 给系统按钮；实测窗口 1360 像素时
+  最右元素边缘在 1208，与系统按钮区间隔 152 像素。
+
 ### 断网降级态
 
 ![降级态](desktop-offline.png)
@@ -71,10 +90,13 @@ npm run package:win -w @agent-relay/control-room-desktop
 
 ## 四、验证证据
 
-- `npx vitest run packages/control-room/ packages/control-room-desktop/`：8 个文件、90 项测试通过。
-  新增：`localizeDiagnostic` 3 项、整页拉丁字母扫描 1 项（含帮助与阅读弹窗）、桌面配置/托盘/摘要 18 项。
+- `npx vitest run packages/control-room/ packages/control-room-desktop/`：8 个文件、97 项测试通过。
+  新增：`localizeDiagnostic` 3 项、整页拉丁字母扫描 1 项（含帮助与阅读弹窗）、
+  桌面配置/托盘/摘要 18 项、菜单模型 4 项、菜单栏渲染与浏览器隐藏 2 项。
 - `npx tsc -p packages/control-room/tsconfig.json --noEmit`：通过。
-- 未打包运行 `electron .`：界面加载、托盘菜单与提示符合预期；`ReleaseControlRoom` 打包产物同样通过。
+- 未打包运行 `electron .`：界面加载、托盘菜单与提示符合预期；打包产物同样通过（含新的页面内菜单栏）。
+- 布局实测：窗口客户区与窗口边界同为 1360×900（无系统标题栏占位）、顶栏高 61 与覆盖层等高、
+  菜单左边界 240（侧栏 222 + 内边距 18）、拖动区属性为 `drag`。
 - 断网降级态：页面可见文本中除 `Relay` 外无拉丁字母（脚本统计 0 个）。
 - 打包流水线：electron-builder 25.1.8 + electron 33.4.11，产物如上表。
 
@@ -83,6 +105,7 @@ npm run package:win -w @agent-relay/control-room-desktop
 - `--capture` 截图开关在「真实模式 + 上游不可达」时会卡在 `capturePage`；冒烟流程已加 6 秒竞速与 20 秒看门狗，
   保证进程一定退出，但该组合下可能拿不到截图（不影响正常启动与托盘）。
 - 未做代码签名，Windows SmartScreen 会提示未知发布者。
-- 未在 macOS / Linux 上打包验证；配置只声明了 Windows 目标。
+- 未在 macOS / Linux 上打包验证；配置只声明了 Windows 目标。非 Windows 平台沿用默认标题栏，
+  页面菜单栏仍可使用，但拖动区与右侧留白只按 Windows 的按钮宽度调过。
 - 托盘「开机自动启动」只在安装版生效（便携版不写注册表），且未做跨版本升级测试。
 - 未验证 20 个以上频道、数百智能体的长期运行；托盘状态每 10 秒读取一次 `/api/bootstrap`。

@@ -11,6 +11,7 @@ directories:
 # 运行期只需要托盘外壳、服务端打包产物与图标；服务端依赖已内联进 dist/server.mjs。
 files:
   - main.cjs
+  - preload.cjs
   - lib/**/*
   - dist/**/*
   - assets/icon.png

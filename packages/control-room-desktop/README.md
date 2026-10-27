@@ -5,6 +5,7 @@
 
 - 界面与 `relay-control-room` 完全同源：服务端是控制中心打包产物，前端是 `packages/control-room/web`。
 - 托盘图标提供：打开界面、复制访问地址、在浏览器中打开、查看运行状态、刷新状态、开机自动启动、退出。
+- 窗口没有系统标题栏：菜单（控制中心 / 视图 / 窗口 / 帮助）画在页面顶栏里，深色、与界面同一套字号与配色。
 - 没有配置凭据时自动进入演示数据模式（页面顶部会说明），不会静默连到任何服务。
 
 ## 运行
@@ -35,6 +36,20 @@ RELAY_CONTROL_ROOM_TOKEN=ot_live_… npm run start -w @agent-relay/control-room-
 
 环境变量：`RELAY_CONTROL_ROOM_TOKEN`（优先）、`RELAY_WORKSPACE_KEY`、`RELAY_API_KEY`、
 `RELAY_CONTROL_ROOM_TZ`（界面与托盘时间，默认 `Asia/Shanghai`）。
+
+## 窗口与菜单
+
+Windows 原生标题栏和它的灰色菜单条没法跟着深色界面走，所以外壳把标题栏隐藏，只保留系统的最小化 / 最大化 / 关闭按钮，
+菜单改由页面绘制（`web/desktop.css` + `web/app.js` 的 `mountDesktopMenu`）：
+
+- 顶栏左侧四组菜单，点击展开、悬停切换、Esc 或点空白处收起，支持左右方向键切换分组。
+- 菜单数据只有一份：`lib/app-menu.mjs`。主进程通过 IPC 交给页面，页面点条目后回传动作 id，
+  主进程只执行白名单里的动作（复制地址、浏览器打开、重新加载、缩放、全屏、最小化到托盘、退出、帮助等）。
+- 页面通过 `preload.cjs` 拿到 `window.relayDesktop`（三个方法：`menu` / `run` / `platform`）；
+  在浏览器里不存在这个对象，菜单栏自然不显示，网页版布局完全不变。
+- 快捷键在 `before-input-event` 里绑定：F5 或 Ctrl+R 重新加载、F11 全屏、Ctrl+0/± 缩放、
+  Ctrl+Q 退出、Ctrl+W 关闭窗口、Ctrl+Shift+I 开发者工具（仅未打包时）。
+- 顶栏本身是窗口拖动区，右侧预留 152px 给系统按钮。
 
 ## 托盘菜单
 
@@ -75,14 +90,15 @@ npm run package:win -w @agent-relay/control-room-desktop
 
 ## 结构
 
-| 路径                     | 作用                                                |
-| ------------------------ | --------------------------------------------------- |
-| `main.cjs`               | 主进程：窗口、托盘、应用菜单、单实例、状态刷新      |
-| `lib/config.mjs`         | 参数与环境变量解析（无凭据即演示模式）              |
-| `lib/room-service.mjs`   | 启动控制中心服务、端口顺延、状态探测                |
-| `lib/tray-menu.mjs`      | 托盘菜单模板与状态摘要（纯函数，可单测）            |
-| `scripts/build.mjs`      | 打包服务端、复制界面资源                            |
-| `scripts/make-icons.mjs` | 用几何图形生成 `icon.png` / `tray.png` / `icon.ico` |
+| 路径                                                | 作用                                                |
+| --------------------------------------------------- | --------------------------------------------------- |
+| `main.cjs`                                          | 主进程：窗口、托盘、应用菜单、单实例、状态刷新      |
+| `lib/config.mjs`                                    | 参数与环境变量解析（无凭据即演示模式）              |
+| `lib/room-service.mjs`                              | 启动控制中心服务、端口顺延、状态探测                |
+| `lib/tray-menu.mjs`                                 | 托盘菜单模板与状态摘要（纯函数，可单测）            |
+| `scripts/build.mjs`                                 | 打包服务端、复制界面资源                            |
+| `scripts/make-icons.mjs`                            | 用几何图形生成 `icon.png` / `tray.png` / `icon.ico` |
+| `web/desktop.css`（在 `packages/control-room/web`） | 桌面专用样式：拖动区、菜单栏与下拉面板              |
 
 ## 注意
 
