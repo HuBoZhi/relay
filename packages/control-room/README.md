@@ -145,3 +145,10 @@ WS="$KEY" npm run seed:acceptance --workspace packages/control-room   # 终端 B
 
 2026-10-27 的问题修复、回归检查与设计对比见
 [验收记录](../../docs/design/relay-control-room/acceptance-2026-10-27/README.md)。
+
+## 界面语言
+
+界面文案一律中文（需求 §3、验收项 R09），包括品牌区、状态、空状态、错误与无障碍名称。
+传输层错误（`fetch failed`、`ECONNREFUSED`、HTTP 状态码等）由 `localizeDiagnostic` 转成中文句子，
+原文只进控制台日志；消息与线程标识不显示在阅读窗口里。`web-render.test.ts` 会扫描整页可见文本，
+除产品名 `Relay` 外出现任何拉丁字母即失败。

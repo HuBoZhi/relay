@@ -129,6 +129,52 @@ describe('control room renderer', () => {
     expect(view.text('.agent-meta')).toMatch(/主机|未知/);
   }, 20_000);
 
+  it('never shows Latin text, including inside dialogs', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+
+    // jsdom has no modal implementation; the page only needs `open` to render.
+    const dialogProto = view.window.HTMLDialogElement?.prototype as
+      | { showModal?: () => void; close?: () => void }
+      | undefined;
+    if (dialogProto) {
+      dialogProto.showModal = function showModal(this: { open: boolean }) {
+        this.open = true;
+      };
+      dialogProto.close = function close(this: { open: boolean }) {
+        this.open = false;
+      };
+    }
+
+    // `Relay` is the product name, the one Latin token the interface keeps.
+    const latin = (): string[] =>
+      ((view?.window.document.body.textContent ?? '').replaceAll('Relay', '').match(/[A-Za-z]/g) ??
+        []) as string[];
+
+    expect(latin(), view.text('body')).toEqual([]);
+
+    view.click('#agents-tab');
+    await new Promise((settle) => setTimeout(settle, 200));
+    expect(latin()).toEqual([]);
+
+    view.click('#help-button');
+    await new Promise((settle) => setTimeout(settle, 200));
+    expect(latin()).toEqual([]);
+    view.click('#help-close');
+
+    view.click('#messages-tab');
+    await new Promise((settle) => setTimeout(settle, 200));
+    view.click('#message-timeline [data-open-message]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(view.text('#dialog-title')).toContain('消息详情');
+    expect(latin()).toEqual([]);
+
+    view.click('[data-view="channel"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(latin()).toEqual([]);
+  }, 20_000);
+
   it('does not present an unreachable workspace as healthy', async () => {
     // A source that failed its reads: empty data, explicit degraded transport.
     source = {

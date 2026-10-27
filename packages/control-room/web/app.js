@@ -171,6 +171,27 @@ function zoneLabel() {
   return ZONE_LABELS[state.timezone] || state.timezone;
 }
 
+// Every failure the operator can see is Chinese. Transport errors arrive in
+// English (`Failed to fetch`, `ECONNREFUSED`, …), so they are named here rather
+// than printed; the raw text stays in the console for diagnosis.
+function describeError(error, fallback = '读取失败') {
+  const raw = error && error.message ? String(error.message) : String(error || '');
+  if (/[\u4e00-\u9fa5]/.test(raw)) return raw;
+  if (/failed to fetch|load failed|network ?error|fetch failed/i.test(raw)) {
+    return '无法连接本地服务，请确认控制中心仍在运行';
+  }
+  if (/abort/i.test(raw)) return '读取已取消';
+  if (/timed?\s*out|timeout/i.test(raw)) return '读取超时，请稍后重试';
+  if (/econnrefused|connection refused/i.test(raw)) return '本地服务拒绝连接';
+  if (/econnreset|socket hang up/i.test(raw)) return '本地服务中断了连接';
+  if (/enotfound|getaddrinfo/i.test(raw)) return '无法解析服务地址';
+  if (/\b(401|403)\b|unauthori[sz]ed|forbidden/i.test(raw)) return '凭据无效或权限不足';
+  if (/\b429\b|too many requests|rate limit/i.test(raw)) return '请求过于频繁，请稍后重试';
+  if (/\b5\d\d\b/.test(raw)) return '本地服务处理请求时出错';
+  console.warn('[控制中心] 未识别的错误原文：', raw);
+  return fallback;
+}
+
 /* -------------------------------------------------------------------- boot */
 
 async function boot() {
@@ -186,7 +207,7 @@ async function boot() {
     state.connection = {
       state: 'error',
       label: '连接失败',
-      detail: error && error.message ? error.message : '无法读取工作空间数据',
+      detail: describeError(error, '无法读取工作空间数据'),
       target: state.connection ? state.connection.target : '本地服务',
       mode: state.mode,
       lastEventAt: null,
@@ -252,7 +273,7 @@ function renderAll() {
 }
 
 function renderFatal(error) {
-  const message = error && error.message ? error.message : '无法读取工作空间数据';
+  const message = describeError(error, '无法读取工作空间数据');
   $('#channel-list').innerHTML = `<div class="error-state"><strong>频道列表读取失败</strong>${esc(
     message
   )}<br>请确认本地服务仍在运行，并检查启动时使用的凭据。<button type="button" id="retry-boot">重试</button></div>`;
@@ -271,7 +292,7 @@ function renderWorkspace() {
     state.mode === 'demo' ? '演示数据' : esc(state.connection ? state.connection.target : '未知地址')
   }<i class="tiny-dot"></i>${state.mode === 'demo' ? '未连接服务' : '只读观察'}`;
   $('#workspace-version').textContent =
-    workspace && workspace.id ? workspace.id.slice(0, 2).toUpperCase() : '01';
+    state.mode === 'demo' ? '演示' : state.connection && state.connection.state === 'live' ? '在线' : '待连';
 
   const onlineNodes = state.nodes.filter((node) => node.status === 'online').length;
   $('#cluster-name').textContent =
@@ -785,7 +806,7 @@ function evidenceLabel(evidence) {
   return (
     {
       tasks: '任务与会话事件',
-      status: '旧版状态事件（status.*）',
+      status: '旧版状态事件',
       messages: '近期消息',
       presence: '在线状态',
       none: '无可用证据',
@@ -954,7 +975,7 @@ async function loadMessages({ reset = false } = {}) {
     }
   } catch (error) {
     if (request === state.messageRequest && state.channel === name && error.name !== 'AbortError') {
-      state.messageError = error.message || '读取消息失败';
+      state.messageError = describeError(error, '读取消息失败');
     }
   } finally {
     if (request === state.messageRequest && state.channel === name) {
@@ -1259,10 +1280,10 @@ async function refreshAll({ reason = 'manual' } = {}) {
       ...state.connection,
       state: 'degraded',
       label: '刷新失败',
-      detail: error.message || '无法读取最新工作空间数据',
+      detail: describeError(error, '无法读取最新工作空间数据'),
     };
     renderConnection();
-    toast(error.message || '刷新失败');
+    toast(describeError(error, '刷新失败'));
   } finally {
     state.bootstrapping = false;
   }
@@ -1305,7 +1326,7 @@ async function openMessage(id) {
     try {
       message = await window.RelayApi.message(id);
     } catch (error) {
-      toast(error.message || '无法读取这条消息');
+      toast(describeError(error, '无法读取这条消息'));
       return;
     }
     if (message) state.recent = [message, ...state.recent].slice(0, 6);
@@ -1334,10 +1355,10 @@ function renderDialog() {
     message.day
   )} ${esc(message.time)} ${esc(zoneLabel())}</time><span>${esc(message.kindLabel)}</span><span>${esc(
     message.receipt
-  )}</span></div><div class="dialog-meta-line mono"><span>${esc(message.id)}</span><span>${
+  )}</span></div><div class="dialog-meta-line mono"><span>${
     message.text.length
-  } 字</span>${message.threadId ? `<span>线程 ${esc(message.threadId)}</span>` : ''}${
-    message.parentId ? `<span>父消息 ${esc(message.parentId)}</span>` : ''
+  } 字</span>${message.threadId ? '<span>属于消息线程</span>' : ''}${
+    message.parentId ? '<span>回复了更早的消息</span>' : ''
   }</div>`;
   const body = $('#dialog-body');
   body.textContent = message.text;

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Work state is derived from reduced agent session events, so an agent with no task event reports `未知` instead of `空闲`, and a channel with only recent messages reports `近期有消息` instead of `工作中`.
 
+### Changed
+
+- `@agent-relay/control-room`: the console now reads Chinese end to end. Transport failures (`fetch failed`, `ECONNREFUSED`, HTTP status codes) render as Chinese captions instead of raw English, the workspace badge names the mode in Chinese, and message/thread identifiers no longer appear in the reader.
+
 ### Removed
 
 - Python workflows, the `agent-relay.py` node provider, and the `agent-relay-sdk` package. Local workflows are YAML, TypeScript, JavaScript, or shell. Cloud and worker workflows are YAML or TypeScript. Node definitions are TypeScript or JavaScript. SDKs are TypeScript and Swift.

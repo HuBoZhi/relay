@@ -9,7 +9,7 @@ window.RelayApi = (() => {
       ...options,
     });
     if (!response.ok) {
-      let message = `请求失败（HTTP ${response.status}）`;
+      let message = `请求失败（状态码 ${response.status}）`;
       try {
         const body = await response.json();
         if (body && typeof body.error === 'string') message = body.error;

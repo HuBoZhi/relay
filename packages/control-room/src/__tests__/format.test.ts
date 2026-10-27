@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { displayNameOf, relativeLabel, shiftDay, toIso, zonedStamp, zonedToday } from '../format.js';
+import {
+  displayNameOf,
+  localizeDiagnostic,
+  relativeLabel,
+  shiftDay,
+  toIso,
+  zonedStamp,
+  zonedToday,
+} from '../format.js';
 import { ThroughputTracker } from '../throughput.js';
 
 const BEIJING = 'Asia/Shanghai';
@@ -85,5 +93,29 @@ describe('ThroughputTracker', () => {
 
     clock += 10 * 60_000;
     expect(tracker.snapshot().total).toBe(0);
+  });
+});
+
+describe('localizeDiagnostic', () => {
+  it('names the transport failures an operator can act on', () => {
+    expect(localizeDiagnostic(new Error('fetch failed'))).toBe('网络请求失败');
+    expect(localizeDiagnostic('connect ECONNREFUSED 127.0.0.1:8787')).toBe('服务拒绝连接');
+    expect(localizeDiagnostic('getaddrinfo ENOTFOUND relay.local')).toBe('无法解析服务地址');
+    expect(localizeDiagnostic('timeout of 10000ms exceeded')).toBe('连接超时');
+    expect(localizeDiagnostic('Request failed with status code 401')).toBe('凭据无效或已过期');
+  });
+
+  it('keeps Chinese context and drops the Latin remainder', () => {
+    const caption = localizeDiagnostic('读取频道失败: ECONNRESET socket hang up');
+    expect(caption).toContain('读取频道失败');
+    expect(caption).toContain('连接被中断');
+    expect(caption).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('never prints English, and falls back when nothing is recognizable', () => {
+    const caption = localizeDiagnostic('boom: something entirely unexpected');
+    expect(caption).not.toMatch(/[A-Za-z]/);
+    expect(caption).toBe('读取失败');
+    expect(localizeDiagnostic(undefined, '无法读取频道列表')).toBe('无法读取频道列表');
   });
 });

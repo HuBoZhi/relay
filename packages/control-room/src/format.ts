@@ -129,3 +129,61 @@ export function truncate(text: string, max: number): string {
   if (flat.length <= max) return flat;
   return `${flat.slice(0, Math.max(0, max - 1))}…`;
 }
+
+/**
+ * Turn a transport/SDK diagnostic into a Chinese caption.
+ *
+ * The room must never print `fetch failed` or `connect ECONNREFUSED …` at an
+ * operator: the interface is Chinese end to end (requirements §3, R09), and an
+ * English stack fragment tells the reader nothing a plain phrase would not. The
+ * known failures are named, whatever Latin text is left is dropped, and the raw
+ * string stays available to the caller for logs only.
+ */
+const DIAGNOSTIC_RULES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/ECONNREFUSED|connection refused/i, '服务拒绝连接'],
+  [/ENOTFOUND|EAI_AGAIN|getaddrinfo|dns/i, '无法解析服务地址'],
+  [/ETIMEDOUT|timed?\s*out|timeout/i, '连接超时'],
+  [/ECONNRESET|EPIPE|socket hang up|network error/i, '连接被中断'],
+  [/ENETUNREACH|ENETDOWN|network is unreachable/i, '网络不可达'],
+  [/fetch failed|load failed|failed to fetch/i, '网络请求失败'],
+  [/CERT_|self.signed|certificate|SSL|TLS/i, '安全连接建立失败'],
+  [/unauthori[sz]ed|invalid (?:token|api key)|401/, '凭据无效或已过期'],
+  [/forbidden|403/, '凭据权限不足'],
+  [/too many requests|rate limit|429/i, '请求过于频繁'],
+  [/aborted|abort(?:ed)? the request/i, '请求已取消'],
+];
+
+// Bare status codes are the vaguest signal available, so they are only used when
+// nothing more specific matched — `401` must read as a credential problem, not as
+// "the server said no".
+const STATUS_RULES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b5\d\d\b/, '服务端返回错误'],
+  [/\b4\d\d\b/, '请求被服务端拒绝'],
+];
+
+export function localizeDiagnostic(text: unknown, fallback = '读取失败'): string {
+  const raw = typeof text === 'string' ? text : text instanceof Error ? text.message : '';
+  const hits: string[] = [];
+  for (const [pattern, label] of DIAGNOSTIC_RULES) {
+    if (pattern.test(raw) && !hits.includes(label)) hits.push(label);
+  }
+  if (hits.length === 0) {
+    for (const [pattern, label] of STATUS_RULES) {
+      if (pattern.test(raw)) {
+        hits.push(label);
+        break;
+      }
+    }
+  }
+  // Keep any Chinese the caller already wrote ("读取频道失败：…"), drop Latin.
+  const chinese = raw
+    .replace(/[A-Za-z][A-Za-z0-9_.:-]*/g, ' ')
+    .replace(/[\u0000-\u001f]/g, ' ')
+    .replace(/[，、]{2,}/g, '，')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:：,，.。;；\-–—_/\\|]+|[\s:：,，;；\-–—_/\\|]+$/g, '');
+  const parts = [...hits];
+  if (/[\u4e00-\u9fa5]/.test(chinese)) parts.push(chinese);
+  const caption = parts.join('；');
+  return truncate(caption || fallback, 60);
+}

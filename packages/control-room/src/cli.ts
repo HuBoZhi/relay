@@ -179,12 +179,18 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    console.error(`无法在 ${options.host}:${options.port} 启动服务：${detail}`);
+    // Kept Chinese-first on purpose: the message the operator reads is a
+    // sentence, not a Node errno fragment. The raw string only reaches the
+    // terminal when someone is already debugging (RELAY_CONTROL_ROOM_DEBUG).
+    console.error(`无法在 ${options.host}:${options.port} 启动服务。`);
     if (/EADDRINUSE/.test(detail)) {
       console.error('该端口已被占用，请用 --port 指定其他端口。');
     } else if (/EACCES/.test(detail)) {
       console.error('当前用户无权监听该端口，请换用大于 1024 的端口。');
+    } else {
+      console.error('请检查监听地址是否可用。');
     }
+    if (process.env.RELAY_CONTROL_ROOM_DEBUG) console.error(detail);
     await source.close().catch(() => undefined);
     process.exitCode = 1;
     return;

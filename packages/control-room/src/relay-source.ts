@@ -32,7 +32,15 @@ import {
 
 import { aggregateChannelState, deriveAgentWork, deriveMetricsFlags } from './derive.js';
 import type { DerivedAgentWork, LegacyWorkSignal } from './derive.js';
-import { displayNameOf, resolveTimezone, toIso, truncate, zonedStamp, zonedToday } from './format.js';
+import {
+  displayNameOf,
+  localizeDiagnostic,
+  resolveTimezone,
+  toIso,
+  truncate,
+  zonedStamp,
+  zonedToday,
+} from './format.js';
 import { agentDisplayName, channelDisplayName, mapMessage } from './mappers.js';
 import type { ControlRoomSource, MessageQuery } from './source.js';
 import { ThroughputTracker } from './throughput.js';
@@ -451,8 +459,7 @@ export class RelayControlRoomSource implements ControlRoomSource {
   }
 
   private handleStreamError(error: unknown): void {
-    const detail = error instanceof Error ? error.message : String(error);
-    this.setConnection('degraded', `事件流异常：${truncate(detail, 80)}`);
+    this.setConnection('degraded', `事件流异常：${localizeDiagnostic(error, '与 Relay 服务的连接被中断')}`);
   }
 
   private setConnection(state: ConnectionState, detail: string): void {
@@ -635,7 +642,7 @@ export class RelayControlRoomSource implements ControlRoomSource {
         this.notice = '当前凭据无权查看该工作空间的频道，请使用具备只读权限的观察者令牌';
         this.setConnection('error', '权限不足，无法读取频道');
       } else {
-        this.setConnection('degraded', `读取频道失败：${truncate(detail, 80)}`);
+        this.setConnection('degraded', `读取频道失败：${localizeDiagnostic(detail, '无法读取频道列表')}`);
       }
       this.log('读取频道失败', error);
     }
