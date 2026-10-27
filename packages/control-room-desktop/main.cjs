@@ -13,6 +13,7 @@
 'use strict';
 
 const { join } = require('node:path');
+const { writeSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
 const { app, BrowserWindow, Menu, Tray, clipboard, dialog, nativeImage, shell } = require('electron');
@@ -39,6 +40,23 @@ let quitting = false;
 let hideNoticed = false;
 let statusTimer = null;
 let smokeShotDone = false;
+let lastMenu = null;
+let lastTooltip = '';
+
+/**
+ * Write a line to stdout without buffering.
+ *
+ * Console output is asynchronous on a pipe, and a smoke run ends with
+ * `app.exit()`, which would drop buffered lines — the very diagnostics the run
+ * exists to produce.
+ */
+function say(line) {
+  try {
+    writeSync(1, `${line}\n`);
+  } catch {
+    console.log(line);
+  }
+}
 
 async function loadHelpers() {
   const [configModule, roomModule, trayModule] = await Promise.all([
@@ -112,23 +130,38 @@ async function createWindow() {
 
   await win.loadURL(room.url);
 
-  if (config.smoke) await captureSmokeShot();
+  if (config.smoke) {
+    // A smoke run must always end: `--capture` in a degraded live session has been
+    // seen to stall inside capturePage, and a hung process is worse than no shot.
+    const watchdog = setTimeout(() => {
+      say('[冒烟] 截图未完成，已强制退出');
+      app.exit(0);
+    }, 20_000);
+    await captureSmokeShot();
+    clearTimeout(watchdog);
+  }
 }
 
 async function captureSmokeShot() {
   if (smokeShotDone) return;
   smokeShotDone = true;
   const target = config.screenshotPath;
-  if (!target) {
-    console.log(`[冒烟] 界面已加载：${room.url}`);
-    app.quit();
-    return;
-  }
   await new Promise((settle) => setTimeout(settle, 1500));
-  const image = await win.webContents.capturePage();
-  await writeFile(target, image.toPNG());
-  console.log(`[冒烟] 界面已加载：${room.url} · 截图已保存`);
-  app.quit();
+  if (target) {
+    // capturePage can stall on an occluded window; the smoke run must always end.
+    const image = await Promise.race([
+      win.webContents.capturePage(),
+      new Promise((settle) => setTimeout(() => settle(null), 6000)),
+    ]);
+    if (image) {
+      await writeFile(target, image.toPNG());
+      say(`[冒烟] 界面已加载：${room.url} · 截图已保存`);
+    } else {
+      say(`[冒烟] 界面已加载：${room.url} · 截图超时，已跳过`);
+    }
+  } else {
+    say(`[冒烟] 界面已加载：${room.url}`);
+  }
 }
 
 function loginItemEnabled() {
@@ -170,8 +203,10 @@ function updateTray() {
       },
     },
   });
+  lastMenu = menu;
   tray.setContextMenu(Menu.buildFromTemplate(menu));
-  tray.setToolTip(trayTooltip({ mode: room ? room.mode : '演示数据', status, error: statusError }));
+  lastTooltip = trayTooltip({ mode: room ? room.mode : '演示数据', status, error: statusError });
+  tray.setToolTip(lastTooltip);
 }
 
 async function refreshStatus() {
@@ -310,6 +345,16 @@ async function start() {
   tray.on('click', showWindow);
   updateTray();
   await refreshStatus();
+  if (config.smoke) {
+    // The tray is the part no screenshot can prove, so the smoke run states it.
+    const labels = (lastMenu || [])
+      .map((item) => (item.type === 'separator' ? '——' : item.label))
+      .join(' | ');
+    say(`[冒烟] 托盘菜单：${labels}`);
+    say(`[冒烟] 托盘提示：${lastTooltip}`);
+    app.quit();
+    return;
+  }
   statusTimer = setInterval(() => void refreshStatus(), STATUS_INTERVAL_MS);
   if (statusTimer.unref) statusTimer.unref();
 }

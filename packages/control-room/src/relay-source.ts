@@ -339,13 +339,13 @@ export class RelayControlRoomSource implements ControlRoomSource {
     this.cacheSize = options.messageCacheSize ?? DEFAULT_CACHE_SIZE;
     this.readTimeoutMs = options.readTimeoutMs ?? DEFAULT_READ_TIMEOUT_MS;
     this.now = options.now ?? Date.now;
-    // Keep the console readable: the SDK error objects are large and repeat on
-    // every retry cycle.
+    // Keep the console readable: the SDK error objects are large, repeat on every
+    // retry cycle, and arrive in English — localizeDiagnostic names the cause.
     this.log =
       options.log ??
       ((message, error) =>
         console.warn(
-          `[control-room] ${message}${error === undefined ? '' : `：${error instanceof Error ? error.message : String(error)}`}`
+          `[control-room] ${message}${error === undefined ? '' : `：${localizeDiagnostic(error, '原因未知')}`}`
         ));
 
     this.client =

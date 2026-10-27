@@ -84,15 +84,27 @@ export async function startRoom({ config, log = () => {} }) {
   };
 }
 
-/** Read the room's own status endpoint; a hung read must not freeze the tray. */
-export async function probe(url, { timeoutMs = 4000 } = {}) {
+/**
+ * Read the room's own status endpoint; a hung read must not freeze the tray.
+ *
+ * `/api/health` is answered from memory, so it separates "the shell is broken"
+ * from "the workspace read is slow or refused" — two very different problems for
+ * whoever is looking at the tray.
+ */
+export async function probe(url, { timeoutMs = 5000 } = {}) {
   if (!url) return { ok: false, error: '本地服务尚未启动' };
   try {
+    const health = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(2000) });
+    if (!health.ok) return { ok: false, error: `本地服务异常（状态码 ${health.status}）` };
+  } catch {
+    return { ok: false, error: '本地服务无响应' };
+  }
+  try {
     const response = await fetch(`${url}/api/bootstrap`, { signal: AbortSignal.timeout(timeoutMs) });
-    if (!response.ok) return { ok: false, error: `读取状态失败（状态码 ${response.status}）` };
+    if (!response.ok) return { ok: false, error: `读取工作空间失败（状态码 ${response.status}）` };
     const bootstrap = await response.json();
     return { ok: true, status: summarize(bootstrap), at: Date.now() };
   } catch {
-    return { ok: false, error: '本地服务无响应' };
+    return { ok: false, error: '读取工作空间超时' };
   }
 }

@@ -69,6 +69,19 @@ describe('summarize', () => {
     expect(summary.messagesToday).toBeNull();
     expect(summary.connectionLabel).toBe('状态未知');
   });
+
+  it('does not report an unreadable workspace as empty', () => {
+    const summary = summarize({
+      channels: [],
+      agents: [],
+      metrics: { messagesToday: 0 },
+      connection: { state: 'degraded', label: '连接降级' },
+    });
+    expect(summary.channels).toBeNull();
+    expect(summary.agents).toBeNull();
+    expect(summary.messagesToday).toBeNull();
+    expect(summary.connectionLabel).toBe('连接降级');
+  });
 });
 
 describe('buildTrayMenu', () => {
@@ -107,6 +120,11 @@ describe('buildTrayMenu', () => {
     const rows = build({ status: null, error: '本地服务无响应' }).map((item) => item.label);
     expect(rows).toContain('数据连接：本地服务无响应');
     expect(rows).toContain('今日消息：未知');
+  });
+
+  it('does not glue an unknown count to a unit', () => {
+    const rows = build({ status: summarize({ channels: null, agents: null }) }).map((item) => item.label);
+    expect(rows).toContain('工作空间：频道未知 · 智能体未知');
   });
 
   it('never prints Latin letters at the operator', () => {

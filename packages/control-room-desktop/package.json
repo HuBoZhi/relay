@@ -19,8 +19,9 @@
   "dependencies": {},
   "devDependencies": {
     "@agent-relay/control-room": "14.0.0",
-    "electron": "^33.4.11",
+    "electron": "33.4.11",
     "electron-builder": "^25.1.8"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "author": "Agent Relay"
 }

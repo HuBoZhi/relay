@@ -89,4 +89,4 @@ npm run package:win -w @agent-relay/control-room-desktop
 - 桌面版和服务一样只监听回环地址，凭据留在进程内，浏览器拿不到。
 - 在设置了 `ELECTRON_RUN_AS_NODE=1` 的终端里跑 `electron` 会退化成普通 Node 进程，
   表现为 `require('electron')` 拿到的是路径字符串；本地调试请先 `unset ELECTRON_RUN_AS_NODE`。
-- 冒烟自检（会打开窗口、截图后退出）：`npm run smoke -w @agent-relay/control-room-desktop -- --screenshot D:/tmp/shot.png`。
+- 冒烟自检（会打开窗口、截图后退出）：`npm run smoke -w @agent-relay/control-room-desktop -- --capture D:/tmp/shot.png`。

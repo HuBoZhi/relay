@@ -2,6 +2,8 @@
 appId: com.agentrelay.controlroom
 productName: 协作控制中心
 copyright: Apache-2.0
+# electron 提升安装在工作区根目录，显式声明版本，打包器才不会找不到它。
+electronVersion: 33.4.11
 directories:
   output: release
   buildResources: assets

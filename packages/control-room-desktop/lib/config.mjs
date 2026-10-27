@@ -68,7 +68,7 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
       case '--smoke':
         config.smoke = true;
         break;
-      case '--screenshot':
+      case '--capture':
         config.screenshotPath = next();
         break;
       default:

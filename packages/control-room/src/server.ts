@@ -12,6 +12,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { localizeDiagnostic } from './format.js';
 import type { ControlRoomSource } from './source.js';
 import type { BootstrapView, MessagePageView, StreamFrame } from './types.js';
 
@@ -121,7 +122,7 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
 
   const server = http.createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => {
-      log(`[control-room] 请求失败 ${request.url}: ${String(error)}`);
+      log(`[control-room] 请求失败 ${request.url}：${localizeDiagnostic(error, '原因未知')}`);
       if (!response.headersSent) textError(response, 500, '服务器处理请求时出错');
       else response.end();
     });
@@ -146,7 +147,7 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
         const bootstrap: BootstrapView = await source.bootstrap();
         json(response, 200, bootstrap);
       } catch (error) {
-        log(`[control-room] 读取概览失败: ${String(error)}`);
+        log(`[control-room] 读取概览失败：${localizeDiagnostic(error, '原因未知')}`);
         textError(response, 503, '无法读取工作空间数据，请检查凭据与网络');
       }
       return;
@@ -162,7 +163,7 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
       try {
         json(response, 200, { hits: await source.search(query, channel) });
       } catch (error) {
-        log(`[control-room] 搜索失败: ${String(error)}`);
+        log(`[control-room] 搜索失败：${localizeDiagnostic(error, '原因未知')}`);
         textError(response, 503, '消息搜索暂不可用');
       }
       return;

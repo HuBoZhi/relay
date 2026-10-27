@@ -6,18 +6,25 @@
  * plain object here — no Electron import — which keeps this file unit-testable.
  */
 
-/** Reduce `/api/bootstrap` into the four facts worth showing in a tray. */
+/**
+ * Reduce `/api/bootstrap` into the four facts worth showing in a tray.
+ *
+ * Counts are only trusted while the source reports a healthy connection: after a
+ * failed read the payload is empty, and showing "0 个频道" would claim the
+ * workspace is empty instead of unreadable.
+ */
 export function summarize(bootstrap) {
-  const channels = Array.isArray(bootstrap?.channels) ? bootstrap.channels.length : null;
-  const agents = Array.isArray(bootstrap?.agents) ? bootstrap.agents.length : null;
-  const today = bootstrap?.metrics?.messagesToday;
   const connection = bootstrap?.connection ?? null;
+  const connectionState = connection?.state ?? 'unknown';
+  const readable = connectionState === 'live' || connectionState === 'paused';
+  const count = (list) => (readable && Array.isArray(list) ? list.length : null);
+  const today = bootstrap?.metrics?.messagesToday;
   return {
-    channels,
-    agents,
-    messagesToday: typeof today === 'number' ? today : null,
+    channels: count(bootstrap?.channels),
+    agents: count(bootstrap?.agents),
+    messagesToday: readable && typeof today === 'number' ? today : null,
     connectionLabel: connection?.label ?? '状态未知',
-    connectionState: connection?.state ?? 'unknown',
+    connectionState,
   };
 }
 
@@ -38,8 +45,8 @@ export function formatUpdatedAt(value, timeZone = 'Asia/Shanghai') {
   }
 }
 
-function count(value, unit) {
-  return value === null || value === undefined ? `${unit}未知` : `${value} ${unit}`;
+function count(value, label) {
+  return value === null || value === undefined ? `${label}未知` : `${value} 个${label}`;
 }
 
 /**
@@ -66,7 +73,7 @@ export function buildTrayMenu({
       ? { label: `数据连接：${error}`, enabled: false }
       : { label: `数据连接：${status?.connectionLabel ?? '状态未知'}`, enabled: false },
     {
-      label: `工作空间：${count(status?.channels, '个频道')} · ${count(status?.agents, '个智能体')}`,
+      label: `工作空间：${count(status?.channels, '频道')} · ${count(status?.agents, '智能体')}`,
       enabled: false,
     },
     {
@@ -99,6 +106,6 @@ export function buildTrayMenu({
 export function trayTooltip({ mode, status, error }) {
   if (error) return `协作控制中心 · ${mode} · ${error}`;
   const channels = status?.channels;
-  const suffix = channels === null || channels === undefined ? '正在读取' : `${channels} 个频道`;
+  const suffix = channels === null || channels === undefined ? '状态未知' : `${channels} 个频道`;
   return `协作控制中心 · ${mode} · ${suffix}`;
 }

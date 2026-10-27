@@ -29,8 +29,9 @@ async function exists(path) {
 }
 
 async function ensureControlRoom() {
-  if (await exists(join(CONTROL_ROOM, 'dist', 'index.js'))) return;
-  console.log('· 控制中心尚未编译，先执行 tsc');
+  // Always recompile: bundling a stale dist would ship the previous server while
+  // the source tree (and the CLI) had already moved on.
+  console.log('· 编译控制中心');
   const result = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsc', '-p', CONTROL_ROOM], {
     cwd: PACKAGE_ROOT,
     stdio: 'inherit',

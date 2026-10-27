@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@agent-relay/control-room`: a read-only collaboration control room. `node packages/control-room/dist/cli.js` serves a loopback-only web console that shows channels, evidenced agent work state, host placement, and live message flow. Credentials stay in the local process; the browser only receives view models. `--demo` runs the same interface on built-in Chinese demo data.
 
+- `@agent-relay/control-room-desktop`: a tray shell around the control room. Closing the window hides it to the tray instead of ending observation; the tray menu opens the interface, copies its address, shows run mode, connection state, workspace and today's message count, and quits. `npm run desktop:package` builds a portable Windows executable and an installer.
+
 - Work state is derived from reduced agent session events, so an agent with no task event reports `未知` instead of `空闲`, and a channel with only recent messages reports `近期有消息` instead of `工作中`.
 
 ### Changed
