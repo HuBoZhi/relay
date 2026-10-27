@@ -304,6 +304,14 @@
   overflow-wrap: anywhere;
 }
 
+/* The workspace card is one line of mode text; breaking it mid-word reads as a
+   rendering bug, so let it clip instead. */
+.workspace div > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .channel-summary > p,
 .channel-task,
 .agent-card p,

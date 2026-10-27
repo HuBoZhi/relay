@@ -9,6 +9,9 @@ ui-dist/
 # Release binaries (created by scripts/build-bun.sh)
 .release/
 
+# Desktop packaging output (electron-builder)
+packages/control-room-desktop/release/
+
 # Bundled binaries (downloaded/built at install time)
 bin/tmux
 bin/agent-relay-test

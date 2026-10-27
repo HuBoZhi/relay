@@ -291,9 +291,6 @@ function renderWorkspace() {
   $('#workspace-target').innerHTML = `${
     state.mode === 'demo' ? '演示数据' : esc(state.connection ? state.connection.target : '未知地址')
   }<i class="tiny-dot"></i>${state.mode === 'demo' ? '未连接服务' : '只读观察'}`;
-  $('#workspace-version').textContent =
-    state.mode === 'demo' ? '演示' : state.connection && state.connection.state === 'live' ? '在线' : '待连';
-
   const onlineNodes = state.nodes.filter((node) => node.status === 'online').length;
   $('#cluster-name').textContent =
     state.mode === 'demo' ? '本地集群' : state.connection ? state.connection.target : '—';

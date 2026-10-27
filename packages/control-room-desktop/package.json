@@ -1,0 +1,26 @@
+{
+  "name": "@agent-relay/control-room-desktop",
+  "version": "14.0.0",
+  "private": true,
+  "description": "协作控制中心桌面托盘外壳：启动本地服务、用系统托盘管理窗口与进程",
+  "type": "module",
+  "main": "main.cjs",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "smoke": "npm run build && electron . --smoke",
+    "package:win": "npm run build && electron-builder --win --publish never",
+    "test": "vitest run --root ../.. packages/control-room-desktop/"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@agent-relay/control-room": "14.0.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "license": "Apache-2.0"
+}
