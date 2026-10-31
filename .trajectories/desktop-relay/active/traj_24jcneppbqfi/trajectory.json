@@ -1,0 +1,46 @@
+{
+  "id": "traj_24jcneppbqfi",
+  "version": 1,
+  "task": {
+    "title": "Relay assisted desktop sessions for ZCode and WorkBuddy"
+  },
+  "status": "active",
+  "startedAt": "2026-10-31T13:44:33.729Z",
+  "agents": [
+    {
+      "name": "codex-desktop-relay",
+      "role": "lead",
+      "joinedAt": "2026-10-31T13:44:33.904Z"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "chap_v292f10m47ee",
+      "title": "Initial work",
+      "agentName": "codex-desktop-relay",
+      "startedAt": "2026-10-31T13:44:33.904Z",
+      "events": [
+        {
+          "ts": 1793455233825,
+          "type": "decision",
+          "content": "User requires CDP to native IPC or SDK only; removed the unshipped UI-assisted prototype. Allow only Runtime protocol calls and exact local app targets.: User requires CDP to native IPC or SDK only; removed the unshipped UI-assisted prototype. Allow only Runtime protocol calls and exact local app targets.",
+          "raw": {
+            "question": "User requires CDP to native IPC or SDK only; removed the unshipped UI-assisted prototype. Allow only Runtime protocol calls and exact local app targets.",
+            "chosen": "User requires CDP to native IPC or SDK only; removed the unshipped UI-assisted prototype. Allow only Runtime protocol calls and exact local app targets.",
+            "alternatives": [],
+            "reasoning": ""
+          },
+          "significance": "high"
+        }
+      ]
+    }
+  ],
+  "commits": [],
+  "filesChanged": [],
+  "projectId": "AgentWorkforce/relay",
+  "tags": [],
+  "_trace": {
+    "startRef": "d0339a5f5b95b02c32c769e0d18a5027abbbfa7d",
+    "endRef": "d0339a5f5b95b02c32c769e0d18a5027abbbfa7d"
+  }
+}
