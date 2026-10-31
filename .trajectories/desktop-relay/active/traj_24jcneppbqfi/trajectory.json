@@ -31,6 +31,18 @@
             "reasoning": ""
           },
           "significance": "high"
+        },
+        {
+          "ts": 1793455849050,
+          "type": "decision",
+          "content": "Verified actual Relay round trips through WorkBuddy desktop SDK and ZCode live host services. ZCode must create v4 sessions; the legacy creation facade produced persistence failures. No mouse, keyboard, DOM, separate app-server or model credential extraction is used.: Verified actual Relay round trips through WorkBuddy desktop SDK and ZCode live host services. ZCode must create v4 sessions; the legacy creation facade produced persistence failures. No mouse, keyboard, DOM, separate app-server or model credential extraction is used.",
+          "raw": {
+            "question": "Verified actual Relay round trips through WorkBuddy desktop SDK and ZCode live host services. ZCode must create v4 sessions; the legacy creation facade produced persistence failures. No mouse, keyboard, DOM, separate app-server or model credential extraction is used.",
+            "chosen": "Verified actual Relay round trips through WorkBuddy desktop SDK and ZCode live host services. ZCode must create v4 sessions; the legacy creation facade produced persistence failures. No mouse, keyboard, DOM, separate app-server or model credential extraction is used.",
+            "alternatives": [],
+            "reasoning": ""
+          },
+          "significance": "high"
         }
       ]
     }

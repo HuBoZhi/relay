@@ -85,7 +85,11 @@ export class DesktopIpcTransport {
     const result = await this.request('Runtime.evaluate', {
       expression, awaitPromise: true, returnByValue: true,
     });
-    if (result.exceptionDetails) throw new Error('Desktop API rejected the call; inspect its structured result');
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails.exception?.description ?? result.exceptionDetails.text ?? 'unknown error';
+      const message = detail.split('\n')[0].slice(0,300).replace(/(?:Bearer\s+\S+|(?:rk|at|ot)_live_[\w-]+|sk-[\w-]+)/gi, '[REDACTED]');
+      throw new Error('Desktop API rejected the call: ' + message);
+    }
     return result.result?.value;
   }
 
