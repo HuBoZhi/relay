@@ -43,6 +43,18 @@
             "reasoning": ""
           },
           "significance": "high"
+        },
+        {
+          "ts": 1793497019515,
+          "type": "decision",
+          "content": "Installed Markdown task runner and safe launch checks. Nine unit tests pass. Live second-turn acceptance is pending because the current WorkBuddy process no longer exposes CDP; did not reuse the one-time restart authorization. Retained active-app runtime temp data and removed own diagnostic scripts.: Installed Markdown task runner and safe launch checks. Nine unit tests pass. Live second-turn acceptance is pending because the current WorkBuddy process no longer exposes CDP; did not reuse the one-time restart authorization. Retained active-app runtime temp data and removed own diagnostic scripts.",
+          "raw": {
+            "question": "Installed Markdown task runner and safe launch checks. Nine unit tests pass. Live second-turn acceptance is pending because the current WorkBuddy process no longer exposes CDP; did not reuse the one-time restart authorization. Retained active-app runtime temp data and removed own diagnostic scripts.",
+            "chosen": "Installed Markdown task runner and safe launch checks. Nine unit tests pass. Live second-turn acceptance is pending because the current WorkBuddy process no longer exposes CDP; did not reuse the one-time restart authorization. Retained active-app runtime temp data and removed own diagnostic scripts.",
+            "alternatives": [],
+            "reasoning": ""
+          },
+          "significance": "high"
         }
       ]
     }

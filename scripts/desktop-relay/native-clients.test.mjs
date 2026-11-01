@@ -25,3 +25,16 @@ test('WorkBuddy SDK submission preserves quoted multiline input and returns its 
   assert.equal(result.response, '结果\n437');
   assert.equal(result.nativeRequestId, 'native-1');
 });
+
+test('ZCode session reuse returns only new assistant messages', async () => {
+  const client = new ZCodeDesktop({}, 'owned-session');
+  let submitted = false;
+  client.call = async (_service, method) => {
+    if (method === 'sendPrompt') { submitted = true; return; }
+    return { session: { workspace: { workspacePath: 'D:/Programs/AgentRelay/desktop-workspace' }, title: 'Relay 专用 · ZCode', status: 'idle' },
+      messages: [{ id: 'old', role: 'assistant', parts: [{ type: 'text', text: 'old answer' }] },
+        ...(submitted ? [{ id: 'new', role: 'assistant', parts: [{ type: 'text', text: 'new answer' }] }] : [])] };
+  };
+  await client.submit('owned-session', 'Next task', 'next-request');
+  assert.equal((await client.poll('owned-session', 'next-request')).response, 'new answer');
+});

@@ -20,3 +20,11 @@
 当前限制：本地按需执行，无常驻服务；内部接口存在版本依赖；仅验收模型回复和消息往返，未验收文件编辑、构建或部署任务；桌面端退出或不带调试参数重启后需要重新开启本机端口。没有发布 npm 包、合并主分支或创建正式版本。
 
 原始结构化回执保留在 `D:\Programs\AgentRelay\reports\workbuddy-desktop-native-via-relay.json` 和 `zcode-desktop-native-via-relay.json`，均不包含认证凭据。
+
+## 后续入口验证（2026-11-01）
+
+已安装 Markdown 任务入口、启动检查入口、独立 UUID 回执与每端进程锁。9 项单元测试通过，两个 PowerShell 入口通过语法解析。会话复用过滤旧回答、Markdown 原文保留、空回答与旧随机标识拒绝均有覆盖。
+
+本轮 WorkBuddy 实机任务入口尝试遇到 `ECONNREFUSED 127.0.0.1:19371`，保存为 `adapter_error / ok=false`。当前客户端未开放端口，启动入口正确拒绝强制结束运行中的应用。因此 Markdown 任务入口的第二轮实机往返仍待重新开放端口后验收，不能把此前探针成功作为本轮已通过的证明。
+
+诊断脚本和测试任务的临时副本已清理。`D:\CodexTemp\relay-native-20261031` 中由桌面应用产生的运行文件可能仍被应用及其子进程使用，暂予保留；清理待办已写入 `D:\Programs\AgentRelay\data\desktop-host-retained-temp.json`，不能在确认相关进程退出前递归删除。

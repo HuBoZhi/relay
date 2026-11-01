@@ -28,6 +28,24 @@ node scripts/desktop-relay/run.mjs zcode D:\Programs\AgentRelay
 
 每次执行会调用真实桌面模型。会话绑定保存在安装目录的 `data/desktop-native.sessions.json`；验收回执位于 `reports/*-desktop-native-via-relay.json`。专用工作目录为 `D:\Programs\AgentRelay\desktop-workspace`。
 
+## 本机安装入口
+
+源文件复制到 `D:\Programs\AgentRelay\desktop-native\`，两个 PowerShell 入口放在 `D:\Programs\AgentRelay\`：
+
+```powershell
+# 检查端口；仅在应用未运行时按带端口参数启动，不强制终止现有应用。
+& D:\Programs\AgentRelay\Start-DesktopApi.ps1
+# 不传 TaskFile 时执行就绪检查；传入时原样发送 Markdown 正文。
+& D:\Programs\AgentRelay\Invoke-DesktopTask.ps1 -Client workbuddy -TaskFile D:\Tasks\任务.md
+& D:\Programs\AgentRelay\Invoke-DesktopTask.ps1 -Client zcode -TaskFile D:\Tasks\任务.md
+```
+
+普通任务超时为 30 分钟，就绪检查为 3 分钟。普通任务的 `ok=true` 表示桌面原生接口报告本轮完成并返回非空回答，不代表代码、构建、部署结果已经独立验收。任务中的审批仍由客户端处理，本适配不授予完全访问权限。
+
+每次调用另存带 UUID 的独立回执；提交前后记录阶段，断线或超时时报告未确认，不自动重发任务。每端使用进程锁，避免本地适配同时投递；异常终止后若残留锁文件，需要先确认原进程已退出，再删除对应的 `data/desktop-native-<client>.lock`。
+
+任务入口的临时目录会在退出时清理。由启动入口拉起的桌面程序需要保留运行临时目录，路径和 PID 记在 `data/desktop-host-<pid>.json`；应在该应用及其子进程退出后核验并清理该目录。应用会话与日志沿用用户已授权的 C 盘保存例外。
+
 ZCode 适配依赖 3.16.3 的模块文件名、服务注册表和协议。版本不匹配时应停止并重新适配，不应回退 UI 自动化。CDP 模块作用域检查仅用来取得已经连接的服务代理，任务操作由桌面后台原生服务执行。
 
 ## 测试
