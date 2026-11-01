@@ -22,7 +22,8 @@ export class WorkBuddyDesktop {
     if (sessionId !== this.sessionId) throw new Error('Dedicated session mismatch');
     return this.transport.evaluate(`(async()=>{
       const c=await wb.conversations.get(${q(sessionId)});
-      if(!c||c.info.transport!=='local'||c.info.title!=='Relay 专用 · WorkBuddy')throw Error('Dedicated session mismatch');
+      if(!c||c.info.id!==${q(sessionId)}||c.info.transport!=='local'||c.info.space?.cwd?.replaceAll('\\\\','/')!==${q(WORKSPACE)})throw Error('Dedicated session mismatch');
+      if(c.info.state!=='idle')throw Error('WorkBuddy session is busy');
       const id=${q(requestId)}, key=${q(sessionId)}+':'+id;
       const jobs=globalThis.__relayNativeJobs??=new Map();
       if(jobs.has(key))return {accepted:true,requestId:id,duplicate:true};
@@ -89,10 +90,17 @@ export class ZCodeDesktop {
 
   async submit(sessionId, text, requestId = randomUUID()) {
     if (sessionId !== this.sessionId) throw new Error('Dedicated session mismatch');
-    const snapshot = await this.call('zcodeAgentService', 'readSession', { workspacePath: WORKSPACE, sessionId });
+    let snapshot;
+    try {
+      snapshot = await this.call('zcodeAgentService', 'readSession', { workspacePath: WORKSPACE, sessionId });
+    } catch (error) {
+      if (!error.message.includes('Session is not active:')) throw error;
+      await this.call('zcodeTaskService', 'resumeTask', { workspacePath: WORKSPACE, taskId: sessionId, mcpServers: [] });
+      snapshot = await this.call('zcodeAgentService', 'readSession', { workspacePath: WORKSPACE, sessionId });
+    }
     if (snapshot?.session?.workspace?.workspacePath !== WORKSPACE) throw new Error('Dedicated ZCode workspace mismatch');
     if (snapshot.session.status !== 'idle') throw new Error('ZCode session is busy');
-    this.baseline = new Set((snapshot.messages ?? []).map(m => m.id ?? m.info?.id));
+    this.baseline = new Set((snapshot.messages ?? []).map(m => m.info?.messageId ?? m.messageId ?? m.id ?? m.info?.id));
     await this.call('zcodeTaskService', 'sendPrompt', {
       taskId: sessionId, content: text, traceId: requestId.replaceAll('-', ''), queryId: requestId,
     });
@@ -101,8 +109,14 @@ export class ZCodeDesktop {
 
   async poll(sessionId, requestId) {
     const snapshot = await this.call('zcodeAgentService', 'readSession', { workspacePath: WORKSPACE, sessionId });
-    const assistants = (snapshot.messages ?? []).filter(m =>
-      !this.baseline?.has(m.id ?? m.info?.id) && (m.role === 'assistant' || m.info?.role === 'assistant'));
+    const messages = snapshot.messages ?? [];
+    const messageId = m => m.info?.messageId ?? m.messageId ?? m.id ?? m.info?.id;
+    const user = messages.find(m =>
+      (m.info?.metadata?.conversationInputIntent?.sourceCommandId ?? m.info?.metadata?.inputIntent?.sourceCommandId) === requestId.replaceAll('-', ''));
+    const descendants = new Set(user ? [messageId(user)] : []);
+    for (const message of messages) if (descendants.has(message.info?.parentMessageId)) descendants.add(messageId(message));
+    const assistants = messages.filter(m => (user ? descendants.has(messageId(m)) : this.baseline && !this.baseline.has(messageId(m))) &&
+      (m.role === 'assistant' || m.info?.role === 'assistant'));
     const response = assistants.flatMap(m => m.parts ?? []).filter(p => p.type === 'text').map(p => p.text ?? p.content ?? '').join('\n');
     const status = snapshot.session?.status;
     if (status === 'idle' && response && snapshot.session.title !== 'Relay 专用 · ZCode') {

@@ -17,6 +17,7 @@
 - WorkBuddy 5.9.2：Relay Action → `wb.conversations.get(...).runPrompt(...)` → Relay 结果回传通过。
 - ZCode 3.16.3：通过桌面现有 MessagePort 服务代理调用 v4 `createTask`、`sendPrompt`、`readSession`，回传通过。没有启动额外 app-server，也没有读取或传送模型凭据。
 - 两轮均要求模型原样返回本次随机标识与计算结果，Relay 回执 `output.ok=true`。没有鼠标、键盘、DOM 操作。
+- 2026-11-01：两端重启后复用原专用会话，通过已安装 Markdown 任务入口的完整实机往返。11 项单元测试通过；详细调用 ID 与故障修复见 `ACCEPTANCE.md`。
 - `run.mjs` 是按次运行的本地适配器，运行期间处理自身发起的调用；尚未提供常驻收件服务。
 
 本机入口（需安装目录内已有 `lib/relay.mjs`、SDK 和受限工作区凭据文件）：
