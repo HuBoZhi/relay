@@ -17,4 +17,4 @@ Request: separate system overview from channel content, make sender timestamps e
 - Updated the three installed web assets under `D:/Programs/RelayControlRoom/resources/app/dist/web`; HTTP on port 4320 serves the new frontend. Refresh the desktop window to load it. Existing service and agent processes were retained.
 - A full installer packaging attempt could not download Electron from GitHub; no new installer was delivered. The installed app’s loose web assets were updated directly.
 - Existing unrelated `.workbuddy/` files and another active Trail trajectory were left untouched. This Markdown is the isolated work/acceptance record.
-- Task scratch files remain at `D:/CodexTemp/relay-ui-20261103`: automatic approval rejected recursive and nonrecursive cleanup commands with only `blocked by policy`. Screenshots, the browser verification script and process caches remain; no unrelated files were removed.
+- Initial forced cleanup was rejected by automatic approval. During the editable-name follow-up, the exact task directory was rechecked for reparse points and safely removed without forcing deletion. No task scratch files remain.

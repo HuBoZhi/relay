@@ -97,8 +97,16 @@
         <section class="overview-heading">
           <div>
             <div class="eyebrow" id="page-eyebrow">多智能体协作观察</div>
-            <h1><span id="page-title">协作控制中心</span><span class="heading-dot"></span></h1>
+            <h1><span id="page-title">协作控制中心</span><span class="heading-dot"></span><button id="rename-channel" class="button" hidden>修改名称</button></h1>
             <p id="overview-subtitle">全局频道状态、智能体任务与消息流转</p>
+            <form id="rename-form" class="rename-form" hidden>
+              <label for="channel-name-input">主题名称</label>
+              <input id="channel-name-input" name="displayName" required maxlength="60" autocomplete="off" />
+              <button class="button" type="submit">保存</button>
+              <button class="button" id="rename-cancel" type="button">取消</button>
+              <button class="button" id="rename-reset" type="button">恢复原名</button>
+              <small>名称保存在本机；原频道标识不变。</small>
+            </form>
           </div>
           <button id="live-toggle" class="button live-button" aria-pressed="false">
             <span class="tiny-dot"></span><span id="live-label">停止观察</span><span data-icon="pause"></span>

@@ -31,6 +31,7 @@ interface Rendered {
 }
 
 interface RenderOptions {
+  storage?: Record<string, string>;
   /** Pretend the page is hosted by the desktop shell and expose its bridge. */
   desktop?: { menu: unknown[]; calls?: string[] };
 }
@@ -39,6 +40,7 @@ async function render(baseUrl: string, options: RenderOptions = {}): Promise<Ren
   const html = await (await fetch(`${baseUrl}/`)).text();
   const dom = new JSDOM(html, { url: `${baseUrl}/`, runScripts: 'outside-only', pretendToBeVisual: true });
   const { window } = dom;
+  for (const [key, value] of Object.entries(options.storage || {})) window.localStorage.setItem(key, value);
   const base = baseUrl;
   window.fetch = ((input: string | URL, init?: RequestInit) =>
     fetch(new URL(String(input), base), init)) as never;
@@ -172,6 +174,66 @@ describe('control room renderer', () => {
     expect(view.text('#breadcrumb-current')).toBe('系统总览');
     expect(view.count('#network [data-graph-agent]')).toBe(0);
     expect(view.count('#channel-list .selected')).toBe(0);
+  }, 20_000);
+
+  it('saves theme names across refreshes, isolates workspaces, and restores the original name', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    view.click('#rename-channel');
+    const input = view.window.document.querySelector<HTMLInputElement>('#channel-name-input')!;
+    input.value = '  核心研发 <团队>  ';
+    view.window.document.querySelector('#rename-form')!.dispatchEvent(new view.window.Event('submit', { cancelable: true }));
+    expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
+    expect(view.text('[data-channel="engineering"] strong')).toBe('核心研发 <团队>');
+    expect(view.text('#breadcrumb-current')).toBe('# 核心研发 <团队>');
+    expect(view.text('#network')).toContain('核心研发 <团队>');
+    expect(view.text('#message-timeline')).toContain('核心研发 <团队>');
+    expect(view.window.document.querySelector('[data-channel="engineering"]')).not.toBeNull();
+    const bootstrap = await source.bootstrap();
+    view.stream('agents', bootstrap);
+    view.stream('bootstrap', { bootstrap });
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
+    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
+    view.close();
+    view = await render(server.url, { storage });
+    view.click('[data-channel="engineering"]');
+    expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
+    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another-workspace', name: 'another-workspace' } } });
+    expect(view.text('#page-title')).toBe('# 工程研发');
+    view.stream('bootstrap', { bootstrap });
+    await new Promise((settle) => setTimeout(settle, 300));
+    view.click('#rename-channel');
+    view.click('#rename-reset');
+    expect(view.text('#page-title')).toBe('# 工程研发');
+    expect(view.text('[data-channel="engineering"] strong')).toBe('工程研发');
+  }, 20_000);
+
+  it('rejects blank theme names, supports cancel, and reports storage failures', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    view.click('#rename-channel');
+    const input = view.window.document.querySelector<HTMLInputElement>('#channel-name-input')!;
+    const submit = () => view!.window.document.querySelector('#rename-form')!.dispatchEvent(new view!.window.Event('submit', { cancelable: true }));
+    input.value = '   ';
+    submit();
+    expect(input.validationMessage).toContain('主题名称');
+    expect(view.text('#page-title')).toBe('# 工程研发');
+    input.value = '未保存';
+    view.click('#rename-cancel');
+    expect(view.text('#page-title')).toBe('# 工程研发');
+    view.click('#rename-channel');
+    input.value = '保存失败';
+    Object.defineProperty(view.window.Storage.prototype, 'setItem', { value() { throw new Error('quota'); } });
+    submit();
+    expect(view.text('#toast')).toContain('名称保存失败');
+    expect(view.text('#page-title')).toBe('# 工程研发');
   }, 20_000);
 
   it('pulses only observed messages and keeps overview scope on channel removal', async () => {

@@ -57,6 +57,7 @@ const state = {
   capabilities: null,
   notice: null,
   channel: null,
+  channelAliases: new Map(),
   agent: null,
   filter: 'all',
   channelSearch: '',
@@ -90,6 +91,62 @@ const state = {
 /* ------------------------------------------------------------------ helpers */
 
 const currentChannel = () => state.channels.find((channel) => channel.name === state.channel) || null;
+const channelLabel = (name, fallback = name) =>
+  state.channels.find((channel) => channel.name === name)?.displayName || fallback;
+const recipientLabel = (message) =>
+  message.kind === 'channel' || message.kind === 'thread_reply'
+    ? channelLabel(message.to.replace(/^#/, ''), message.toName || '未标明接收对象')
+    : message.toName || '未标明接收对象';
+
+function aliasStorageKey() {
+  return `relay.channel-names:${JSON.stringify([state.mode, state.connection?.target, state.workspace?.id || state.workspace?.name])}`;
+}
+
+function readChannelAliases() {
+  try {
+    const entries = JSON.parse(localStorage.getItem(aliasStorageKey()) || '[]');
+    state.channelAliases = new Map(Array.isArray(entries) ? entries.filter((entry) =>
+      Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string' &&
+      entry[1].trim().length > 0 && entry[1].length <= 60) : []);
+  } catch {
+    state.channelAliases = new Map();
+  }
+}
+
+function applyChannelAliases(channels) {
+  return channels.map((channel) => ({
+    ...channel,
+    originalDisplayName: channel.originalDisplayName || channel.displayName,
+    displayName: state.channelAliases.get(channel.name) || channel.originalDisplayName || channel.displayName,
+  }));
+}
+
+function saveChannelName(reset = false) {
+  const channel = currentChannel();
+  if (!channel) return;
+  const value = $('#channel-name-input').value.trim();
+  if (!reset && (!value || value.length > 60)) {
+    $('#channel-name-input').setCustomValidity('请输入 1–60 个字符的主题名称');
+    $('#channel-name-input').reportValidity();
+    return;
+  }
+  const aliases = new Map(state.channelAliases);
+  if (reset) aliases.delete(channel.name);
+  else aliases.set(channel.name, value);
+  try {
+    localStorage.setItem(aliasStorageKey(), JSON.stringify([...aliases]));
+  } catch {
+    toast('名称保存失败，请检查本机存储是否可用');
+    return;
+  }
+  state.channelAliases = aliases;
+  state.channels = applyChannelAliases(state.channels);
+  $('#rename-form').hidden = true;
+  renderAll();
+  if ($('#message-dialog').open) renderDialog();
+  $('#rename-channel').focus();
+  toast(reset ? '已恢复原名' : '主题名称已保存');
+}
 const channelAgents = (channel) =>
   state.agents.filter((agent) => (agent.channelNames || []).includes(channel.name));
 const channelClass = (channel) => CHANNEL_CLASS[channel.state] || 'unknown';
@@ -225,7 +282,8 @@ function applyBootstrap(data) {
   state.timezone = data.timezone || state.timezone;
   state.workspace = data.workspace;
   state.connection = data.connection;
-  state.channels = data.channels || [];
+  readChannelAliases();
+  state.channels = applyChannelAliases(data.channels || []);
   state.agents = data.agents || [];
   state.nodes = data.nodes || [];
   state.metrics = data.metrics;
@@ -277,6 +335,8 @@ function renderAll() {
 function renderPage() {
   const overview = state.view === 'global';
   const channel = currentChannel();
+  $('#rename-channel').hidden = overview || !channel;
+  if (overview) $('#rename-form').hidden = true;
   document.body.dataset.page = overview ? 'overview' : 'channel';
   $('.metrics').hidden = !overview;
   $('.inspector').hidden = overview;
@@ -394,6 +454,7 @@ function renderChannels() {
 function selectChannel(name, agent = null) {
   if (!state.channels.some((channel) => channel.name === name)) return;
   const changed = name !== state.channel;
+  $('#rename-form').hidden = true;
   state.channel = name;
   state.view = 'channel';
   state.agent = agent;
@@ -754,6 +815,7 @@ function updateZoom() {
 function setView(view) {
   if (view === 'channel' && !currentChannel()) return;
   state.view = view;
+  $('#rename-form').hidden = true;
   state.zoom = 1;
   state.panX = 0;
   state.panY = 0;
@@ -859,7 +921,7 @@ function visibleMessages() {
     if (range === 'today' && message.day !== today) return false;
     if (range === 'yesterday' && message.day !== yesterday) return false;
     if (!query) return true;
-    return `${message.text} ${message.fromName} ${message.toName}`.toLowerCase().includes(query);
+    return `${message.text} ${message.fromName} ${recipientLabel(message)}`.toLowerCase().includes(query);
   });
 }
 
@@ -873,7 +935,7 @@ function messageArticle(message) {
   )}" aria-label="放大阅读 ${esc(message.time)} ${esc(message.fromName)} 的消息" title="放大阅读">${icon(
     'expand'
   )}</button></div><div class="message-route"><strong>${esc(message.fromName)}</strong><span class="arrow">→</span><span class="recipient">${esc(
-    message.toName || '未标明接收对象'
+    recipientLabel(message)
   )}</span></div><button class="message-body ${long && !expanded ? 'collapsed' : ''}" data-open-message="${esc(
     message.id
   )}" aria-label="放大阅读消息正文">${esc(message.text)}</button><div class="message-footer-row">${
@@ -1227,7 +1289,7 @@ function applyAgentsFrame(frame) {
     return;
   }
   state.agents = frame.agents || [];
-  state.channels = frame.channels || [];
+  state.channels = applyChannelAliases(frame.channels || []);
   state.metrics = frame.metrics || state.metrics;
   state.connection = frame.connection || state.connection;
   if (!state.channels.some((channel) => channel.name === state.channel)) {
@@ -1387,10 +1449,10 @@ function renderDialog() {
   const message = findMessage(state.dialogId);
   if (!message) return;
   const index = state.dialogIds.indexOf(message.id);
-  $('#dialog-title').textContent = `# ${message.channelLabel} · 消息详情`;
+  $('#dialog-title').textContent = `# ${channelLabel(message.channel, message.channelLabel)} · 消息详情`;
   $('#dialog-meta').innerHTML = `<div class="dialog-route"><strong>${esc(
     message.fromName
-  )}</strong><span class="arrow">→</span><span>${esc(message.toName || '未标明接收对象')}</span></div><div class="dialog-meta-line"><time>${esc(
+  )}</strong><span class="arrow">→</span><span>${esc(recipientLabel(message))}</span></div><div class="dialog-meta-line"><time>${esc(
     message.day
   )} ${esc(message.time)} ${esc(zoneLabel())}</time><span>${esc(message.kindLabel)}</span><span>${esc(
     message.receipt
@@ -1428,11 +1490,11 @@ function renderRecent() {
       (message) =>
         `<button class="activity-row" data-activity-message="${esc(message.id)}" aria-label="查看 ${esc(
           message.time
-        )} ${esc(message.fromName)} 发给 ${esc(message.toName || '未标明接收对象')} 的消息"><time>${esc(
+        )} ${esc(message.fromName)} 发给 ${esc(recipientLabel(message))} 的消息"><time>${esc(
           message.time
         )}</time><span class="activity-route"><b>${esc(message.fromName)}</b><em>→</em>${esc(
-          message.toName || '未标明接收对象'
-        )}</span><span class="activity-tag">#${esc(message.channelLabel)}</span></button>`
+          recipientLabel(message)
+        )}</span><span class="activity-tag">#${esc(channelLabel(message.channel, message.channelLabel))}</span></button>`
     )
     .join('');
 }
@@ -1453,6 +1515,30 @@ function setTab(tab) {
 }
 
 /* ------------------------------------------------------------------ events */
+
+$('#rename-channel').onclick = () => {
+  const channel = currentChannel();
+  if (!channel) return;
+  $('#rename-form').hidden = false;
+  $('#channel-name-input').value = channel.displayName;
+  $('#channel-name-input').setCustomValidity('');
+  $('#channel-name-input').focus();
+  $('#channel-name-input').select();
+};
+$('#rename-form').onsubmit = (event) => { event.preventDefault(); saveChannelName(); };
+$('#channel-name-input').oninput = () => $('#channel-name-input').setCustomValidity('');
+$('#rename-cancel').onclick = () => { $('#rename-form').hidden = true; $('#rename-channel').focus(); };
+$('#rename-reset').onclick = () => saveChannelName(true);
+$('#rename-form').onkeydown = (event) => {
+  if (event.key === 'Escape') { event.stopPropagation(); $('#rename-cancel').click(); }
+};
+window.addEventListener('storage', (event) => {
+  if (event.key !== aliasStorageKey() && event.key !== null) return;
+  readChannelAliases();
+  state.channels = applyChannelAliases(state.channels);
+  renderAll();
+  if ($('#message-dialog').open) renderDialog();
+});
 
 $('#channel-list').onclick = (event) => {
   const button = event.target.closest('[data-channel]');
