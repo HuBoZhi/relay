@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { MENU_ACTIONS, buildAppMenu, menuActionIds } from '../lib/app-menu.mjs';
-import { DEFAULT_PORT, resolveConfig } from '../lib/config.mjs';
+import { DEFAULT_PORT, loginItemArgs, resolveConfig } from '../lib/config.mjs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildTrayMenu, formatUpdatedAt, summarize, trayTooltip } from '../lib/tray-menu.mjs';
 
 const bootstrap = {
@@ -12,6 +15,26 @@ const bootstrap = {
 };
 
 describe('resolveConfig', () => {
+  it('reconnects after login without inheriting the launch shell credentials', () => {
+    const directory=mkdtempSync(join(tmpdir(),'relay-login-test-'));
+    try {
+      const stateFile=join(directory,'workspace.private.json');
+      writeFileSync(stateFile,JSON.stringify({workspaceKey:'fixture-key'}));
+      const original=resolveConfig({argv:['app','--workspace-state',stateFile],env:{}});
+      const args=loginItemArgs(original,'D:/Relay Data');
+      expect(args).not.toContain('fixture-key');
+      const restarted=resolveConfig({argv:['app',...args],env:{}});
+      expect(restarted.demo).toBe(false);
+      expect(restarted.token).toBe('fixture-key');
+      expect(restarted.showWindow).toBe(false);
+      writeFileSync(stateFile,JSON.stringify({workspaceKey:'rotated-fixture-key'}));
+      expect(resolveConfig({argv:['app',...args],env:{}}).token).toBe('rotated-fixture-key');
+    } finally {rmSync(directory,{recursive:true,force:true});}
+  });
+
+  it('rejects an unusable configured workspace instead of opening demo data', () => {
+    expect(()=>resolveConfig({argv:['app','--workspace-state','D:/missing-relay-state.json'],env:{}})).toThrow('无法读取工作区凭据');
+  });
   it('falls back to demo data when no credential exists', () => {
     const config = resolveConfig({ argv: ['electron', '.'], env: {} });
     expect(config.demo).toBe(true);

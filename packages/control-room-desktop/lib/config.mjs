@@ -7,6 +7,8 @@
  * top of a credential: when one exists, the room runs in read-only live mode.
  */
 
+import { readFileSync } from 'node:fs';
+
 const CREDENTIAL_ENV = ['RELAY_CONTROL_ROOM_TOKEN', 'RELAY_WORKSPACE_KEY', 'RELAY_API_KEY'];
 
 /** Strip the launcher's own argv entries so flags work in dev and packaged builds. */
@@ -31,6 +33,7 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
     showWindow: true,
     smoke: false,
     screenshotPath: null,
+    workspaceStateFile: env.RELAY_CONTROL_ROOM_STATE_FILE?.trim() || null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -58,6 +61,9 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
       case '--token':
         config.token = next();
         config.tokenSource = '参数';
+        break;
+      case '--workspace-state':
+        config.workspaceStateFile = next();
         break;
       case '--demo':
         config.demo = true;
@@ -89,11 +95,32 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
     }
   }
 
+  if (!config.token && config.workspaceStateFile && !config.demo) {
+    try {
+      const state = JSON.parse(readFileSync(config.workspaceStateFile, 'utf8').replace(/^\uFEFF/, ''));
+      if (typeof state.workspaceKey !== 'string' || !state.workspaceKey.trim()) throw new Error();
+      config.token = state.workspaceKey.trim();
+      config.tokenSource = '工作区状态文件';
+    } catch {
+      throw new Error('无法读取工作区凭据，请检查状态文件的路径、格式和权限。');
+    }
+  }
+
   // No credential is not an error for a desktop app: the interface opens on the
   // demo dataset and states that plainly.
   if (!config.token) config.demo = true;
 
   return config;
+}
+
+/** Persist paths and view settings, never credentials, in the Windows login entry. */
+export function loginItemArgs(config, userDataPath) {
+  const args = ['--no-window', '--port', String(config.port), '--host', config.host,
+    '--user-data-dir', userDataPath];
+  if (config.workspaceStateFile) args.push('--workspace-state', config.workspaceStateFile);
+  if (config.baseUrl) args.push('--base-url', config.baseUrl);
+  if (config.demo) args.push('--demo');
+  return args;
 }
 
 /** Human-readable run mode; never echoes the credential. */

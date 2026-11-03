@@ -31,11 +31,26 @@ RELAY_CONTROL_ROOM_TOKEN=ot_live_… npm run start -w @agent-relay/control-room-
 | `--host <地址>` | 监听地址，默认 `127.0.0.1`                         |
 | `--base-url`    | Relay 服务地址，不填则用部署默认值                 |
 | `--token`       | 只读观察者令牌或工作空间密钥（不写入任何配置文件） |
+| `--workspace-state` | 从已有本机 Relay 状态 JSON 的 `workspaceKey` 字段读取凭据，适用于开机启动 |
 | `--demo`        | 强制使用演示数据                                   |
 | `--no-window`   | 启动后只驻留托盘，不打开窗口                       |
 
 环境变量：`RELAY_CONTROL_ROOM_TOKEN`（优先）、`RELAY_WORKSPACE_KEY`、`RELAY_API_KEY`、
 `RELAY_CONTROL_ROOM_TZ`（界面与托盘时间，默认 `Asia/Shanghai`）。
+
+也可通过 `RELAY_CONTROL_ROOM_STATE_FILE` 指定已有状态文件。显式令牌、环境令牌优先于状态文件；指定的状态文件不可用时报告错误，不切换到演示数据。状态文件只在本机主进程读取，密钥不会出现在启动项或浏览器地址中。
+
+本机安装示例（复用已有 Electron 运行文件与服务端 bundle，不下载依赖）：
+
+```powershell
+& packages/control-room-desktop/scripts/install-local.ps1 `
+  -RuntimeSource G:\Coding\Github\relay\packages\control-room-desktop\release\win-unpacked `
+  -BundleSource G:\Coding\Github\relay\packages\control-room-desktop\dist
+```
+
+默认安装到 `D:\Programs\RelayControlRoom`，复用 `D:\Programs\AgentRelay\data\workspace.private.json`，创建用户登录启动项 `RelayControlRoom` 和开始菜单“Relay 可视化控制台”。登录后以 `--no-window` 驻留托盘，右键菜单显示运行状态并可通过系统默认浏览器打开网页。原启动项记录在安装目录的 `startup-install-record.json`。
+
+托盘的开机启动开关保留状态文件路径、端口及用户数据目录；每次启动重新读取当前凭据，避免继承不到终端环境变量而进入演示模式。未指定状态文件的临时令牌会话不能启用开机启动。指定 `--user-data-dir` 时，配置、日志和运行临时目录位于该目录下。
 
 ## 窗口与菜单
 
