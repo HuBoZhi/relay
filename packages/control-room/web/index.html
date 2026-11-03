@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./desktop.css" />
     <title>协作控制中心 · Relay</title>
   </head>
-  <body>
+  <body data-page="overview">
     <div class="app-shell">
       <aside class="sidebar" aria-label="频道导航">
         <a class="brand" href="./" aria-label="协作控制中心首页"
@@ -96,8 +96,8 @@
         </div>
         <section class="overview-heading">
           <div>
-            <div class="eyebrow">多智能体协作观察</div>
-            <h1>协作控制中心<span class="heading-dot"></span></h1>
+            <div class="eyebrow" id="page-eyebrow">多智能体协作观察</div>
+            <h1><span id="page-title">协作控制中心</span><span class="heading-dot"></span></h1>
             <p id="overview-subtitle">全局频道状态、智能体任务与消息流转</p>
           </div>
           <button id="live-toggle" class="button live-button" aria-pressed="false">
@@ -143,8 +143,8 @@
           <section class="network-panel" id="network-panel" aria-label="系统数据流转视图">
             <div class="panel-heading">
               <div>
-                <span class="eyebrow">全局协作网络</span>
-                <h2>系统数据流转<span class="live-chip" id="topology-live">等待数据</span></h2>
+                <span class="eyebrow" id="network-eyebrow">全局协作网络</span>
+                <h2><span id="network-title">系统数据流转</span><span class="live-chip" id="topology-live">等待数据</span></h2>
               </div>
               <button
                 class="icon-button"
@@ -213,7 +213,7 @@
               <div id="recent-activity"></div>
             </section>
           </section>
-          <aside class="inspector" aria-label="选中频道详情">
+          <aside class="inspector" aria-label="选中频道详情" hidden>
             <div id="channel-summary"></div>
             <div class="detail-tabs" role="tablist" aria-label="频道详情类型">
               <button
@@ -325,7 +325,7 @@
       <ol>
         <li>
           <strong>选择频道</strong>
-          <p>左侧频道和图上的频道节点均可点击，右侧详情随之切换。</p>
+          <p>系统总览展示全局信息；点击左侧频道或图上的节点，进入该频道的独立协作空间。</p>
         </li>
         <li>
           <strong>追踪智能体</strong>

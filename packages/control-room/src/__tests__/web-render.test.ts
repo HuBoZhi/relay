@@ -26,6 +26,7 @@ interface Rendered {
   text(selector: string): string;
   count(selector: string): number;
   click(selector: string): void;
+  stream(type: string, payload: unknown): void;
   close(): void;
 }
 
@@ -49,8 +50,11 @@ async function render(baseUrl: string, options: RenderOptions = {}): Promise<Ren
     removeEventListener() {},
   })) as never;
   // stdlib jsdom has no EventSource; the page degrades to polling-free rendering.
+  const streamListeners = new Map<string, (event: { data: string }) => void>();
   window.EventSource = class {
-    addEventListener() {}
+    addEventListener(type: string, listener: (event: { data: string }) => void) {
+      streamListeners.set(type, listener);
+    }
     close() {}
     onopen: unknown = null;
     onerror: unknown = null;
@@ -88,6 +92,9 @@ async function render(baseUrl: string, options: RenderOptions = {}): Promise<Ren
       const element = window.document.querySelector(selector);
       element?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }) as never);
     },
+    stream(type: string, payload: unknown) {
+      streamListeners.get(type)?.({ data: JSON.stringify(payload) });
+    },
     close() {
       window.close();
     },
@@ -119,8 +126,13 @@ describe('control room renderer', () => {
     expect(view.text('#metric-channels-working')).toMatch(/^\d+$/);
     expect(view.text('#metric-agents-running')).toMatch(/^\d+$/);
     expect(view.count('#network [data-graph-channel]')).toBe(8);
-    // The global map expands members only for the selected channel.
-    expect(view.count('#network [data-graph-agent]')).toBe(Number(view.text('#agent-count')));
+    // Overview contains only workspace information, with no selected-channel detail.
+    expect(view.count('#network [data-graph-agent]')).toBe(0);
+    expect(view.window.document.body.dataset.page).toBe('overview');
+    expect(view.window.document.querySelector<HTMLElement>('.inspector')?.hidden).toBe(true);
+    expect(view.window.document.querySelector<HTMLElement>('.metrics')?.hidden).toBe(false);
+    expect(view.text('#breadcrumb-current')).toBe('系统总览');
+    expect(view.count('#channel-list .selected')).toBe(0);
     expect(view.count('#traffic-chart i')).toBe(12);
     expect(view.count('#recent-activity [data-activity-message]')).toBeGreaterThan(0);
 
@@ -139,11 +151,52 @@ describe('control room renderer', () => {
     view.click('#channel-list [data-channel="engineering"]');
     await new Promise((settle) => setTimeout(settle, 300));
     expect(view.text('.channel-title h2')).toContain('工程研发');
+    expect(view.window.document.body.dataset.page).toBe('channel');
+    expect(view.window.document.querySelector<HTMLElement>('.metrics')?.hidden).toBe(true);
+    expect(view.window.document.querySelector<HTMLElement>('.inspector')?.hidden).toBe(false);
+    expect(view.window.document.querySelector<HTMLElement>('.activity-section')?.hidden).toBe(true);
+    expect(view.count('#network [data-graph-channel]')).toBe(0);
+    expect(view.count('#network [data-graph-agent]')).toBe(Number(view.text('#agent-count')));
+    expect(view.text('#page-title')).toContain('工程研发');
+    const time = view.window.document.querySelector('#message-timeline time');
+    expect(time?.getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(time?.getAttribute('title')).toContain('北京时间');
     expect(view.window.document.querySelector('#agents-panel')?.hidden).toBe(true);
     view.click('#agents-tab');
     await new Promise((settle) => setTimeout(settle, 200));
     expect(view.count('.agent-card')).toBeGreaterThan(0);
     expect(view.text('.agent-meta')).toMatch(/主机|未知/);
+    view.click('#overview-button');
+    expect(view.window.document.body.dataset.page).toBe('overview');
+    expect(view.window.document.querySelector<HTMLElement>('.inspector')?.hidden).toBe(true);
+    expect(view.text('#breadcrumb-current')).toBe('系统总览');
+    expect(view.count('#network [data-graph-agent]')).toBe(0);
+    expect(view.count('#channel-list .selected')).toBe(0);
+  }, 20_000);
+
+  it('pulses only observed messages and keeps overview scope on channel removal', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    expect(view.count('.observed-flow')).toBe(0);
+    const bootstrap = await source.bootstrap();
+    const observed = { ...bootstrap.recentMessages[0], id: 'observed-event' };
+    view.stream('message', { message: observed });
+    view.stream('message', { message: observed });
+    expect(view.count('.observed-flow')).toBe(1);
+    // Status frames often follow messages immediately; keep the event visible.
+    view.stream('agents', bootstrap);
+    expect(view.count('.observed-flow')).toBe(1);
+    await new Promise((settle) => setTimeout(settle, 1850));
+    expect(view.count('.observed-flow')).toBe(0);
+    view.stream('agents', {
+      ...bootstrap,
+      channels: bootstrap.channels.filter(channel => channel.state !== 'attention'),
+    });
+    expect(view.window.document.body.dataset.page).toBe('overview');
+    expect(view.window.document.querySelector<HTMLElement>('.inspector')?.hidden).toBe(true);
+    // Channel removal starts a replacement history fetch; let it finish before closing jsdom.
+    await new Promise((settle) => setTimeout(settle, 300));
   }, 20_000);
 
   it('never shows Latin text, including inside dialogs', async () => {

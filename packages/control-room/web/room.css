@@ -511,3 +511,48 @@
     padding-block: 8px;
   }
 }
+
+/* Page scope is controlled by navigation; hidden content never occupies space. */
+[hidden] { display: none !important; }
+body[data-page='overview'] .workbench { grid-template-columns: minmax(0, 1fr); }
+body[data-page='channel'] .workbench { grid-template-columns: minmax(0, 1fr) minmax(390px, 39%); }
+.nav-overview { background: transparent; border-color: transparent; }
+.nav-overview.active { background: #1d3038; border-color: #36555d; color: #d3fff6; }
+.overview-heading h1 { min-width: 0; }
+#page-title { overflow-wrap: anywhere; }
+body[data-page='channel'] .overview-heading p { max-width: 900px; overflow-wrap: anywhere; }
+.graph-stage {
+  background-image: radial-gradient(ellipse at center, #14343c66, transparent 65%), radial-gradient(#54798035 .7px, transparent .7px);
+  background-size: auto, 24px 24px;
+}
+.network-panel { background: linear-gradient(145deg, #10212866, #0b1118 65%); }
+.network-orbit { stroke: #457780; opacity: .45; }
+.network-ring { stroke: #3c6c75; opacity: .45; }
+.channel-link.inactive { stroke: #6b929c; opacity: .5; stroke-dasharray: 3 6; }
+.graph-channel .channel-shape { fill: #12252e; stroke: #4b7781; }
+.graph-channel.inactive .channel-shape { fill: #11212a; stroke: #47636f; }
+.graph-channel .channel-name { font-size: 12px !important; fill: #d6ecf0; }
+.graph-channel .channel-caption { fill: #9bb3bc; font-size: 10px; }
+.relay-core .core-shell { fill: #12383f; stroke: #79d8d0; stroke-width: 1.2; }
+.core-ring { stroke: #5ba5ac; }
+.observed-flow { fill: none; stroke: #a3fff0; stroke-width: 3; stroke-linecap: round; filter: url(#small-glow); pointer-events: none; animation: observed-arrival 1.4s cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes observed-arrival { from { opacity: .9; } to { opacity: 0; } }
+.message { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+.message-route { grid-column: 1; grid-row: 1; align-self: center; flex-wrap: wrap; min-width: 0; }
+.message-meta { grid-column: 2; grid-row: 1; margin: 0; gap: 8px; }
+.message-meta time { color: #b7d6dc; font: 12px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.message-body, .message-footer-row { grid-column: 1 / -1; }
+.message-route strong, .message-route .recipient { overflow-wrap: anywhere; }
+body[data-page='channel'] .message-kind { display: none; }
+button:active { transform: scale(.98); }
+@media (max-width: 1100px) {
+  body[data-page='channel'] .workbench { grid-template-columns: minmax(0, 1fr); }
+  body[data-page='channel'] .network-panel { min-height: 580px; }
+}
+@media (max-width: 620px) {
+  .nav-overview { display: flex; margin: 0 0 12px; min-height: 40px; }
+  body[data-page='channel'] .network-panel { min-height: 460px; }
+  .message { column-gap: 8px; }
+  .message-meta time { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .observed-flow { animation: none; } }

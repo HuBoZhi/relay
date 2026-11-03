@@ -269,7 +269,35 @@ function renderAll() {
   renderAgents();
   renderMessages();
   renderConnection();
+  renderPage();
   paintIcons();
+}
+
+// Navigation owns the scope of the entire workspace, not just the graph.
+function renderPage() {
+  const overview = state.view === 'global';
+  const channel = currentChannel();
+  document.body.dataset.page = overview ? 'overview' : 'channel';
+  $('.metrics').hidden = !overview;
+  $('.inspector').hidden = overview;
+  $('.traffic-section').hidden = !overview;
+  $('.activity-section').hidden = !overview;
+  $('#overview-button').classList.toggle('active', overview);
+  $('#overview-button').setAttribute('aria-pressed', String(overview));
+  $('#breadcrumb-current').textContent = overview ? '系统总览' : channel ? `# ${channel.displayName}` : '频道详情';
+  $('#page-title').textContent = overview ? '协作控制中心' : channel ? `# ${channel.displayName}` : '频道详情';
+  $('#page-eyebrow').textContent = overview ? '多智能体协作观察' : '频道协作空间';
+  $('#overview-subtitle').textContent = overview
+    ? `全局频道状态、智能体任务与消息流转 · ${zoneLabel()}`
+    : channel?.topic || '该频道的参与节点、工作状态与消息记录';
+  $('#network-eyebrow').textContent = overview ? '全局协作网络' : '频道内部协作';
+  $('#network-title').textContent = overview ? '系统数据流转' : '频道数据流转';
+  $('.graph-hint').lastChild.textContent = overview ? '选择频道，进入独立协作空间' : '选择节点，查看频道内参与者';
+  $$('[data-view]').forEach((button) => {
+    const active = button.dataset.view === state.view;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
 }
 
 function renderFatal(error) {
@@ -339,7 +367,7 @@ function renderChannels() {
   $('#channel-list').innerHTML = list.length
     ? list
         .map((channel) => {
-          const selected = channel.name === state.channel;
+          const selected = state.view === 'channel' && channel.name === state.channel;
           const members = channelAgents(channel);
           const bars = [5, 9, 7, 12, 8]
             .map((height, index) => {
@@ -367,6 +395,7 @@ function selectChannel(name, agent = null) {
   if (!state.channels.some((channel) => channel.name === name)) return;
   const changed = name !== state.channel;
   state.channel = name;
+  state.view = 'channel';
   state.agent = agent;
   state.zoom = 1;
   state.panX = 0;
@@ -386,6 +415,7 @@ function selectChannel(name, agent = null) {
   renderGraph();
   renderSummary();
   renderAgents();
+  renderPage();
   setTab(agent ? 'agents' : state.tab);
   if (!state.messages.has(name) || changed) void loadMessages({ reset: true });
   else {
@@ -512,35 +542,9 @@ function layoutGlobal() {
     placed.set(channel.name, { x: Math.round(x), y: Math.round(y) });
   });
 
-  const agentPositions = [];
-  for (const channel of channels) {
-    // Expand one channel at a time; showing every member obscures the network.
-    if (channel.name !== state.channel) continue;
-    const base = placed.get(channel.name);
-    const members = channelAgents(channel);
-    const dx = base.x - cx;
-    const dy = base.y - cy;
-    const length = Math.hypot(dx, dy) || 1;
-    const outward = { x: dx / length, y: dy / length };
-    const tangent = { x: -outward.y, y: outward.x };
-    members.forEach((agent, index) => {
-      const spread = Math.min(52, 26 + members.length * 7);
-      const offset = (index - (members.length - 1) / 2) * (members.length > 1 ? spread / 1.4 : 0);
-      const distance = 52 + Math.abs(outward.x) * 50 + (index % 2) * 12;
-      const x = base.x + tangent.x * offset + outward.x * distance;
-      const y = base.y + tangent.y * offset + outward.y * distance;
-      agentPositions.push({
-        agent,
-        channel,
-        origin: { x: base.x, y: base.y },
-        x: Math.round(Math.min(862, Math.max(38, x))),
-        y: Math.round(Math.min(410, Math.max(26, y))),
-      });
-    });
-  }
   return {
     channels: channels.map((channel) => ({ channel, ...placed.get(channel.name) })),
-    agents: agentPositions,
+    agents: [],
   };
 }
 
@@ -570,7 +574,7 @@ function routeToChannel(x, y) {
   const length = Math.hypot(dx, dy) || 1;
   const ux = dx / length;
   const uy = dy / length;
-  const clearance = Math.min(78 / Math.abs(ux || 0.001), 30 / Math.abs(uy || 0.001));
+  const clearance = Math.min(105 / Math.abs(ux || 0.001), 34 / Math.abs(uy || 0.001));
   const sx = cx + ux * 67;
   const sy = cy + uy * 67;
   const ex = x - ux * clearance;
@@ -583,7 +587,7 @@ const packet = (id, duration, delay, warning = false) =>
 
 function channelNode(entry, index) {
   const { channel, x, y } = entry;
-  const selected = channel.name === state.channel;
+  const selected = state.view === 'channel' && channel.name === state.channel;
   const cls = channelClass(channel);
   const inactive = cls === 'idle' || cls === 'offline' || cls === 'unknown';
   return `<g class="graph-channel ${selected ? 'selected' : ''} ${cls === 'warning' ? 'warning' : ''} ${
@@ -592,13 +596,13 @@ function channelNode(entry, index) {
     channel.displayName
   )}，${esc(channel.stateLabel)}" aria-pressed="${selected}" transform="translate(${x} ${y})"><title>#${esc(
     channel.displayName
-  )} · ${esc(channel.stateLabel)} · ${esc(channel.stateReason)}</title><rect class="channel-shape" x="-77" y="-28" width="154" height="56" rx="7"/><text x="-63" y="-5" class="channel-name"># ${esc(
-    channel.displayName.slice(0, 10)
-  )}</text><text x="-63" y="15" class="channel-caption">${esc(channel.stateLabel)} · ${
+  )} · ${esc(channel.stateLabel)} · ${esc(channel.stateReason)}</title><rect class="channel-shape" x="-104" y="-32" width="208" height="64" rx="9"/><text x="-88" y="-7" class="channel-name"># ${esc(
+    channel.displayName.length > 15 ? `${channel.displayName.slice(0, 14)}…` : channel.displayName
+  )}</text><text x="-88" y="17" class="channel-caption">${esc(channel.stateLabel)} · ${
     channel.memberCount
-  } 个节点</text><circle cx="62" cy="-13" r="2.5" fill="${
+  } 个节点</text><circle cx="89" cy="-17" r="2.5" fill="${
     cls === 'warning' ? '#deb375' : cls === 'active' ? '#7ce7d5' : '#667985'
-  }"/><text x="58" y="17" class="channel-number">${String(index + 1).padStart(2, '0')}</text></g>`;
+  }"/><text x="83" y="17" class="channel-number">${String(index + 1).padStart(2, '0')}</text></g>`;
 }
 
 function agentNode(entry, focus = false) {
@@ -632,6 +636,8 @@ function agentNode(entry, focus = false) {
 
 function renderGraph() {
   const svg = $('#network');
+  const scope = state.view === 'global' ? 'global' : `channel:${state.channel}`;
+  const pulses = svg.dataset.scope === scope ? $$('.observed-flow', svg) : [];
   let html = '';
   const channel = currentChannel();
 
@@ -643,7 +649,7 @@ function renderGraph() {
     layout.channels.forEach((entry, index) => {
       const cls = channelClass(entry.channel);
       const flowing = cls === 'active' || cls === 'warning';
-      html += `<path id="flow-${index}" class="channel-link ${entry.channel.name === state.channel ? 'selected' : ''} ${
+      html += `<path id="flow-${index}" class="channel-link ${
         cls === 'warning' ? 'warning' : ''
       } ${flowing ? '' : 'inactive'}" d="${routeToChannel(entry.x, entry.y)}" marker-end="url(#${
         cls === 'warning' ? 'arrow-amber' : 'arrow'
@@ -706,6 +712,14 @@ function renderGraph() {
   }
 
   svg.innerHTML = `<title>系统频道与智能体逻辑拓扑</title>${GRAPH_DEFS}<g id="graph-camera">${html}</g>`;
+  svg.dataset.scope = scope;
+  for (const pulse of pulses) {
+    const path = $(`#${pulse.dataset.link}`, svg);
+    if (path) {
+      pulse.setAttribute('d', path.getAttribute('d'));
+      $('#graph-camera').append(pulse);
+    }
+  }
   // Membership is not proof of a message delivery or its direction.
   if (state.mode !== 'demo') $$('[marker-end]', svg).forEach((path) => path.removeAttribute('marker-end'));
   $('.legend-flow').innerHTML = '<i></i>' + (state.mode === 'demo' ? '演示流转' : '成员关系');
@@ -719,8 +733,8 @@ function updateGraphScale() {
   const hint = $('#graph-coordinate-left');
   if (!hint) return;
   hint.innerHTML = `${esc(
-    state.workspace ? state.workspace.displayName : '工作空间'
-  )}<br><span>逻辑协作网络</span>`;
+    state.view === 'channel' ? currentChannel()?.displayName || '频道' : state.workspace ? state.workspace.displayName : '工作空间'
+  )}<br><span>${state.view === 'channel' ? '频道参与关系' : '逻辑协作网络'}</span>`;
 }
 
 function updateZoom() {
@@ -738,6 +752,7 @@ function updateZoom() {
 }
 
 function setView(view) {
+  if (view === 'channel' && !currentChannel()) return;
   state.view = view;
   state.zoom = 1;
   state.panX = 0;
@@ -748,6 +763,8 @@ function setView(view) {
     button.setAttribute('aria-pressed', String(active));
   });
   renderGraph();
+  renderChannels();
+  renderPage();
 }
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -793,7 +810,7 @@ function renderSummary() {
     evidenceLabel(channel.evidence)
   )}${channel.archived ? ' · 频道已归档，历史可查' : ''}</p></div>`;
   $('#agent-count').textContent = String(channel.memberCount);
-  $('#breadcrumb-current').textContent = `# ${channel.displayName}`;
+  renderPage();
   paintIcons(container);
   const focus = $('#focus-channel');
   if (focus) focus.onclick = () => setView('channel');
@@ -851,7 +868,7 @@ function messageArticle(message) {
   const expanded = state.expanded.has(message.id);
   return `<article class="message" data-message-id="${esc(message.id)}"><div class="message-meta"><time datetime="${esc(
     message.createdAt
-  )}">${esc(message.time)}</time><span class="message-kind">${esc(message.kindLabel)}</span><button class="icon-button" data-open-message="${esc(
+  )}" title="${esc(`${message.day} ${message.time} ${zoneLabel()}`)}">${esc(message.time || stamp(message.createdAt)?.time || '时间未知')}</time><span class="message-kind">${esc(message.kindLabel)}</span><button class="icon-button" data-open-message="${esc(
     message.id
   )}" aria-label="放大阅读 ${esc(message.time)} ${esc(message.fromName)} 的消息" title="放大阅读">${icon(
     'expand'
@@ -1079,9 +1096,7 @@ function renderConnection() {
   const chipLive = $('#topology-live');
   chipLive.textContent = state.paused ? '已暂停' : live ? '实时事件' : connection.label;
   chipLive.classList.toggle('paused', !live || state.paused);
-  $('#overview-subtitle').textContent = live
-    ? `全局频道状态、智能体任务与消息流转 · ${zoneLabel()}`
-    : `全局频道状态、智能体任务与消息流转 · ${connection.label}`;
+  renderPage();
 }
 
 function renderLiveToggle() {
@@ -1131,6 +1146,8 @@ function onLiveMessage(message) {
     .slice(0, 6);
   renderRecent();
 
+  if (!duplicate && !state.paused) pulseMessage(message);
+
   const channel = state.channels.find((entry) => entry.name === message.channel);
   if (channel) channel.lastMessageAt = message.createdAt;
   if (!duplicate && state.metrics && message.day === todayDay() && state.metrics.messagesToday !== null) {
@@ -1161,6 +1178,27 @@ function onLiveMessage(message) {
 
 function cssEscape(value) {
   return String(value).replace(/["\\]/g, '\\$&');
+}
+
+// A single bounded pulse represents an observed event. Membership alone never animates.
+function pulseMessage(message) {
+  if (reduced.matches || state.paused || document.hidden) return;
+  const index = state.channels.findIndex((channel) => channel.name === message.channel);
+  if (index < 0 || (state.view === 'channel' && message.channel !== state.channel)) return;
+  const paths = state.view === 'global'
+    ? [$(`#flow-${index}`)]
+    : channelAgents(currentChannel()).flatMap((agent, memberIndex) =>
+        agent.name === message.from || agent.name === message.to ? [$(`#focus-${memberIndex}`)] : []);
+  for (const path of paths.filter(Boolean)) {
+    const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pulse.setAttribute('d', path.getAttribute('d'));
+    pulse.setAttribute('class', 'observed-flow');
+    pulse.dataset.link = path.id;
+    pulse.setAttribute('pathLength', '1');
+    path.parentNode.append(pulse);
+    pulse.addEventListener('animationend', () => pulse.remove(), { once: true });
+    setTimeout(() => pulse.remove(), 1800);
+  }
 }
 
 function showPendingButton() {
@@ -1194,12 +1232,16 @@ function applyAgentsFrame(frame) {
   state.connection = frame.connection || state.connection;
   if (!state.channels.some((channel) => channel.name === state.channel)) {
     const next = state.channels.find((channel) => !channel.archived) || state.channels[0];
-    if (next) selectChannel(next.name);
-    else {
+    if (next) {
+      const previousView = state.view;
+      selectChannel(next.name);
+      if (previousView === 'global') setView('global');
+    } else {
       state.messageAbort?.abort();
       state.messageRequest += 1;
       state.loadingMessages = false;
       state.channel = null;
+      state.view = 'global';
       state.agent = null;
       state.pending = 0;
       $('#pending-messages')?.remove();
