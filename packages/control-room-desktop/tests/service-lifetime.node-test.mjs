@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 test('Windows service survives its launcher and restarts a failed console', { skip: process.platform !== 'win32', timeout: 60000 }, async () => {
   assert.doesNotMatch(tmpdir(), /^C:/i, 'Set TEMP/TMP/TMPDIR to a task directory on D: before running');
   const root = await mkdtemp(join(tmpdir(), 'relay-lifetime-'));
-  const script = resolve('packages/control-room-desktop/scripts/Start-ControlRoomService.ps1');
+  const script = fileURLToPath(new URL('../scripts/Start-ControlRoomService.ps1', import.meta.url));
   const run = (action) => execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script,
     '-Action', action, '-ConsoleDir', root], { encoding: 'utf8', windowsHide: true });
   const statusPath = join(root, 'data', 'console-service-status.json');

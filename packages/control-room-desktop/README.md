@@ -31,6 +31,11 @@ RELAY_CONTROL_ROOM_TOKEN=ot_live_… npm run start -w @agent-relay/control-room-
 与 `scripts/Start-ControlRoomService.ps1` 一起放到适配器目录，由原来的登录入口调用
 `Start-RelaySystem.ps1`。它复用现有工作区，不创建新工作区。
 
+同时使用 `scripts/Start-RelayFactory.ps1` 替换适配器目录中的同名启动脚本。
+Factory 由独立隐藏宿主启动，标准输出和错误分别写入适配器目录的
+`logs/factory.stdout.log`、`logs/factory.stderr.log`，启动终端可正常结束。
+已有 Factory 会话不会自动重启；新启动方式在下一次启动 Factory 时生效。
+
 控制台由 Windows 桌面 Shell 启动的独立监护进程管理，启动终端或自动化任务结束后继续驻留。
 监护进程接管已有控制台；退出后按退避间隔重启，重复启动只保留一个监护进程。
 统一模式下，菜单“退出”也会触发重新拉起；需要停止本地控制台及监护时，使用：
