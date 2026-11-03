@@ -2,6 +2,13 @@
    pagination, and loading placeholders. The visual system stays the one from
    the design prototype (styles.css). */
 
+/* The panel/page already identify the channel. Keep duplicate SVG captions out
+   of the top node's label space at every viewport and graph zoom level. */
+.focus-backdrop .focus-kicker,
+.focus-backdrop .focus-caption {
+  display: none;
+}
+
 /* ---------------------------------------------------------- connection state */
 
 .connection-bar {

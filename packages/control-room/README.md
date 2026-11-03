@@ -7,6 +7,11 @@
 
 ## 快速开始
 
+图中文字布局回归检查：先构建本包，设置 `RELAY_LAYOUT_BROWSER` 为已有 Chromium 的可执行文件，
+再运行 `npm run test:layout -w @agent-relay/control-room`。它在真实浏览器中测量 1、4、7 个节点、
+1680/1280/390 像素视口的文字边界，检查标题与节点信息是否重叠。Windows 下先将
+`TEMP`、`TMP`、`TMPDIR` 设置到本次 D 盘临时目录；检查不会下载浏览器。
+
 ```bash
 # 1. 构建工作区依赖
 npm run build:core

@@ -29,6 +29,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli.js",
     "test": "vitest run --root ../.. packages/control-room/",
+    "test:layout": "node --test tests/graph-label-layout.node-test.mjs",
     "seed:acceptance": "node scripts/seed-acceptance-workspace.mjs"
   },
   "dependencies": {
