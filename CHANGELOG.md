@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `relay-agent-connect`: share a global desktop Relay skill across local agents, select project/model sessions, and configure ZCode/WorkBuddy loopback APIs at sign-in and manual startup.
+- `relay-agent-connect`: share a global desktop Relay skill across local agents, select project/model sessions, and configure ZCode/WorkBuddy/Factory loopback APIs at sign-in and manual startup; Factory's launcher follows installed version updates.
 
 - `scripts/desktop-relay`: connect Factory desktop to Relay with dedicated sessions, Markdown tasks, and results correlated to the exact native turn; support `-Client factory` in both local entry points.
 

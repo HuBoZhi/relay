@@ -7,7 +7,7 @@ $sourceSkill=Join-Path $PSScriptRoot '../../.agents/skills/relay-agent-connect/S
 $destination=Join-Path $SkillRoot 'relay-agent-connect'
 $backup=Join-Path $RuntimeRoot ('data/skill-install-backup-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
-foreach($file in @('global-run.mjs','global-options.mjs','native-clients.mjs','Invoke-RelayAgent.ps1','Configure-RelayStartup.ps1')){
+foreach($file in @('global-run.mjs','global-options.mjs','native-clients.mjs','Invoke-RelayAgent.ps1','Configure-RelayStartup.ps1','Start-RelayFactory.ps1')){
   $target=if($file.EndsWith('.mjs')){Join-Path $RuntimeRoot "desktop-native/$file"}else{Join-Path $RuntimeRoot $file}
   if(Test-Path -LiteralPath $target){Copy-Item -LiteralPath $target -Destination (Join-Path $backup $file)}
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $target
