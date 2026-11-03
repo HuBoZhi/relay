@@ -12,7 +12,7 @@
 
 'use strict';
 
-const { join } = require('node:path');
+const { join, dirname } = require('node:path');
 const { writeSync, mkdirSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
@@ -55,7 +55,7 @@ const TOPBAR_HEIGHT = 61;
 // Filled by `start()` before any window or tray exists.
 let config = null;
 let buildTrayMenu = null;
-let loginItemArgs = null;
+let loginItemCommand = null;
 let trayTooltip = null;
 let startRoom = null;
 let probe = null;
@@ -100,7 +100,7 @@ async function loadHelpers() {
   MENU_ACTIONS = new Set(menuModule.MENU_ACTIONS);
   appMenuModel = menuModule.buildAppMenu({ isPackaged: app.isPackaged });
   buildTrayMenu = trayModule.buildTrayMenu;
-  loginItemArgs = configModule.loginItemArgs;
+  loginItemCommand = configModule.loginItemCommand;
   trayTooltip = trayModule.trayTooltip;
   startRoom = roomModule.startRoom;
   probe = roomModule.probe;
@@ -220,8 +220,12 @@ function loginItemEnabled() {
 }
 
 function loginItemOptions() {
-  return { name: 'RelayControlRoom', path: process.execPath,
-    args: loginItemArgs(config, app.getPath('userData')), openAsHidden: true };
+  return { name: 'RelayControlRoom', ...loginItemCommand(config, {
+    executable:process.execPath,userDataPath:app.getPath('userData'),
+    windowsPowerShell:join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),
+    runtimeRoot:config.workspaceStateFile ? dirname(dirname(config.workspaceStateFile)) : '',
+    consoleDir:dirname(process.execPath),
+  }), openAsHidden:true };
 }
 
 function updateTray() {

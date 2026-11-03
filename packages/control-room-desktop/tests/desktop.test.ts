@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MENU_ACTIONS, buildAppMenu, menuActionIds } from '../lib/app-menu.mjs';
-import { DEFAULT_PORT, loginItemArgs, resolveConfig } from '../lib/config.mjs';
+import { DEFAULT_PORT, loginItemArgs, loginItemCommand, resolveConfig } from '../lib/config.mjs';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,14 @@ const bootstrap = {
 };
 
 describe('resolveConfig', () => {
+  it('keeps the unified system launcher when the tray toggles Windows startup',()=>{
+    const config=resolveConfig({argv:['app','--system-launcher','D:/Relay/start.ps1'],env:{RELAY_CONTROL_ROOM_TOKEN:'fixture-key'}});
+    const command=loginItemCommand(config,{executable:'app.exe',userDataPath:'D:/profile',windowsPowerShell:'powershell.exe',runtimeRoot:'D:/Relay',consoleDir:'D:/Console'});
+    expect(command.path).toBe('powershell.exe');
+    expect(command.args).toContain('D:/Relay/start.ps1');
+    expect(command.args).not.toContain('fixture-key');
+    expect(loginItemArgs(config,'D:/profile')).toContain('--system-launcher');
+  });
   it('reconnects after login without inheriting the launch shell credentials', () => {
     const directory=mkdtempSync(join(tmpdir(),'relay-login-test-'));
     try {

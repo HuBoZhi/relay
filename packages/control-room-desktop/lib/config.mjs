@@ -34,6 +34,7 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
     smoke: false,
     screenshotPath: null,
     workspaceStateFile: env.RELAY_CONTROL_ROOM_STATE_FILE?.trim() || null,
+    systemLauncher: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -64,6 +65,9 @@ export function resolveConfig({ argv = process.argv, env = process.env } = {}) {
         break;
       case '--workspace-state':
         config.workspaceStateFile = next();
+        break;
+      case '--system-launcher':
+        config.systemLauncher = next();
         break;
       case '--demo':
         config.demo = true;
@@ -118,9 +122,16 @@ export function loginItemArgs(config, userDataPath) {
   const args = ['--no-window', '--port', String(config.port), '--host', config.host,
     '--user-data-dir', userDataPath];
   if (config.workspaceStateFile) args.push('--workspace-state', config.workspaceStateFile);
+  if (config.systemLauncher) args.push('--system-launcher', config.systemLauncher);
   if (config.baseUrl) args.push('--base-url', config.baseUrl);
   if (config.demo) args.push('--demo');
   return args;
+}
+
+export function loginItemCommand(config, {executable,userDataPath,windowsPowerShell,runtimeRoot,consoleDir}) {
+  if(config.systemLauncher) return {path:windowsPowerShell,args:['-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass',
+    '-File',config.systemLauncher,'-RuntimeRoot',runtimeRoot,'-ConsoleDir',consoleDir]};
+  return {path:executable,args:loginItemArgs(config,userDataPath)};
 }
 
 /** Human-readable run mode; never echoes the credential. */

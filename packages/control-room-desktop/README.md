@@ -48,6 +48,10 @@ RELAY_CONTROL_ROOM_TOKEN=ot_live_… npm run start -w @agent-relay/control-room-
   -BundleSource G:\Coding\Github\relay\packages\control-room-desktop\dist
 ```
 
+加入 `-SystemLauncher D:\Programs\AgentRelay\Start-RelaySystem.ps1` 可安装统一入口：登录启动项和开始菜单均先检查/启动 ZCode、WorkBuddy、Factory 的桌面接口，再启动同一工作区的托盘控制台。原来的三个独立 Run 项会在备份后移除；托盘开机启动开关保留统一入口。运行结果记录在 `D:\Programs\AgentRelay\data\unified-system-status.json`。已运行却未开启接口的编辑器会显示“需要重启”，不会强制结束用户任务。
+
+统一的是当前已验收的“托管 Relaycast＋本机桌面适配器＋控制台”系统，远端后台本来就持续运行。安装版官方 CLI 的 native broker 不支持 Windows，统一入口不会启动或冒充该 broker。不要把 `agent-relay node status` 中的 broker 停止状态误当成托管消息服务断开。
+
 默认安装到 `D:\Programs\RelayControlRoom`，复用 `D:\Programs\AgentRelay\data\workspace.private.json`，创建用户登录启动项 `RelayControlRoom` 和开始菜单“Relay 可视化控制台”。登录后以 `--no-window` 驻留托盘，右键菜单显示运行状态并可通过系统默认浏览器打开网页。原启动项记录在安装目录的 `startup-install-record.json`。
 
 托盘的开机启动开关保留状态文件路径、端口及用户数据目录；每次启动重新读取当前凭据，避免继承不到终端环境变量而进入演示模式。未指定状态文件的临时令牌会话不能启用开机启动。指定 `--user-data-dir` 时，配置、日志和运行临时目录位于该目录下。
