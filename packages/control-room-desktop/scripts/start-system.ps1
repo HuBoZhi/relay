@@ -2,7 +2,7 @@ param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Prog
 $ErrorActionPreference='Stop'
 $stateFile=Join-Path $RuntimeRoot 'data/workspace.private.json'
 if(!(Test-Path -LiteralPath $stateFile)){throw 'Existing Relay workspace state is required; no new workspace will be created'}
-$record=Get-Content -LiteralPath (Join-Path $ConsoleDir 'startup-install-record.json') -Raw|ConvertFrom-Json
+$record=Get-Content -LiteralPath (Join-Path $ConsoleDir 'startup-install-record.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if($record.workspaceStatePath -ine $stateFile){throw 'Console and desktop adapters must use the same workspace state file'}
 $temporaryPath=Join-Path $ConsoleDir 'data/temp'
 New-Item -ItemType Directory -Path $temporaryPath -Force|Out-Null
