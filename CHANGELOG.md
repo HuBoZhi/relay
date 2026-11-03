@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `relay-agent-connect`: preserve unified console/interface sign-in startup when reconfiguring individual desktop interfaces.
+
 - `scripts/desktop-relay`: reuse saved desktop sessions after client restarts and correlate ZCode replies with the current task, even when WorkBuddy automatically changes its session title.
 
 ### Removed

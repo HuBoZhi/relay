@@ -19,6 +19,9 @@ function Test-AppShortcut($shortcut,$app){
     ($shortcut.TargetPath -ieq $windowsPowerShell -and $shortcut.Arguments.Contains('"'+$factoryLauncher+'"'))
 }
 $runKey='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$unifiedFile=Join-Path $RuntimeRoot 'data/unified-startup.json'
+$unifiedStartup=$false
+if(Test-Path -LiteralPath $unifiedFile){$unifiedStartup=(Get-Content -LiteralPath $unifiedFile -Raw|ConvertFrom-Json).enabled -eq $true}
 if($Action -eq 'Configure'){
   $backup=Join-Path $RuntimeRoot ('data/startup-backup-'+[guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path $backup -Force | Out-Null
@@ -62,10 +65,11 @@ if($Action -eq 'Configure'){
       [Environment]::SetEnvironmentVariable('WORKBUDDY_REMOTE_DEBUGGING_PORT','19371','User')
     }
     # Run entries start each client with its loopback interface at sign-in.
-    New-ItemProperty -LiteralPath $runKey -Name $app.Name -Value ('"'+$target+'" '+$args) -PropertyType String -Force | Out-Null
+    if(!$unifiedStartup){New-ItemProperty -LiteralPath $runKey -Name $app.Name -Value ('"'+$target+'" '+$args) -PropertyType String -Force | Out-Null}
   }
   $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $backup 'before.json') -Encoding utf8
   Write-Output "Configured shortcuts and sign-in startup. Backup: $backup"
+  if($unifiedStartup){Write-Output 'Sign-in startup is managed by Start-RelaySystem; no independent Run entry was created.'}
 }
 foreach($app in $apps){
   $ready=$false

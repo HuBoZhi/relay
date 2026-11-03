@@ -56,6 +56,10 @@ Factory 的登录令牌只在 renderer 内经原生认证接口交给 daemon，�
 
 ## 启动和恢复
 
+本机现在使用统一入口 `D:\Programs\AgentRelay\Start-RelaySystem.ps1`。它检查/启动三个桌面接口，再启动同一工作区的托盘控制台（网页 `http://127.0.0.1:4320`）；开机只有 `RelayControlRoom` 一个总入口。优先用此入口启动整套本机接入。运行状态见 `data\unified-system-status.json`，不要把“编辑器进程存在”当作接口已就绪。已运行但未开接口时如实报告需要重启，不擅自强制结束任务。
+
+实际后台是持续运行的托管 Relaycast，控制台和适配器共享 `data\workspace.private.json`。当前官方 native broker 明确不支持 Windows；`agent-relay node status` 显示 stopped 不代表托管消息服务断开，不为此创建第二个工作区或绕过平台检查。`data\unified-startup.json` 启用时，接口配置脚本只更新快捷方式并保留总启动项，不重新添加三个独立 Run 项。
+
 用户已于 2026-11-03 授权 ZCode/WorkBuddy 的 Relay 接入、全局技能与启动设置所需的 C 盘写入，随后明确要求把 Factory 接入和启动配置纳入同一技能。该授权不取消其他任务的 D 盘临时文件规则。客户端会话、日志和登录状态沿用各自目录；任务临时文件仍在 `D:\CodexTemp`。
 
 `Configure-RelayStartup.ps1 -Action Configure` 配置三个客户端的开始菜单、现有桌面/任务栏快捷方式、当前用户登录启动项及 WorkBuddy 的端口环境变量；可用 `-Client factory` 仅配置 Factory。修改前的记录和快捷方式位于 `data\startup-backup-*\before.json`。仅修改目标确为对应应用的链接。系统级快捷方式无权限时创建/更新同名用户快捷方式。任务栏缓存或升级后重建的入口可能需重新固定/重新配置；直接运行不带参数的原始 exe 不保证开启接口。恢复时依据备份逐项还原，不覆盖其他软件的配置。
