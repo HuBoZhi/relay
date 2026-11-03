@@ -28,4 +28,4 @@
 - 已将五个脚本安装到 `D:\Programs\AgentRelay`；旧版脚本与技能备份在 `data\recovery-install-backup-20261103-01`，没有重新配置用户快捷方式或启动项。
 - 实际用 Windows PowerShell 5.1 执行已安装 `Start-RelaySystem.ps1`：三个客户端均 `action=reused`、`state=ready`、`validation=desktop-interface-only`，控制台健康检查通过。无需为验收故意重启当前客户端。
 - 登录入口已核对仍指向该脚本。并未执行 Windows 注销或重启，因此下次登录的系统触发尚未现场观察；同一个实际入口已经运行通过。
-- 本次临时目录：`D:\CodexTemp\relay-auto-recovery-20261103-01`，结束后清理；正式源代码和记录保留在功能分支 worktree。
+- 本次临时目录：`D:\CodexTemp\relay-auto-recovery-20261103-01`；每个测试自己的夹具目录均已由 finally 清理。最后清理任务根目录时，自动审批拒绝了带路径核验的删除命令；再次只使用已核验固定绝对路径的 `Remove-Item -LiteralPath ... -Recurse -Force` 仍被拒绝，理由为 `blocked by policy`。根目录及其 Node 编译缓存暂保留，无本次后台任务占用；未改用其他删除工具绕过。正式源代码和记录保留在功能分支 worktree。
