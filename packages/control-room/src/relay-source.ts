@@ -88,6 +88,10 @@ export interface RelayMessagingLike {
 export interface RelaySourceOptions {
   /** Workspace key (`rk_live_…`) or scoped observer token (`ot_live_…`). */
   workspaceKey: string;
+  /** Separate read-only realtime credential when REST uses the workspace key. */
+  observerToken?: string;
+  /** Desktop runtimes before Node 22 supply a compatible implementation. */
+  webSocketImpl?: typeof WebSocket;
   baseUrl?: string;
   timezone?: string;
   /** Full re-read cadence for channels/agents/nodes/work states. */
@@ -362,7 +366,8 @@ export class RelayControlRoomSource implements ControlRoomSource {
       this.events =
         options.events ??
         createObserverEventSource({
-          observerToken: options.workspaceKey,
+          observerToken: options.observerToken ?? options.workspaceKey,
+          ...(options.webSocketImpl ? { webSocketImpl: options.webSocketImpl } : {}),
           baseUrl: options.baseUrl,
           onCursor: (seq) => {
             this.cursor = seq;

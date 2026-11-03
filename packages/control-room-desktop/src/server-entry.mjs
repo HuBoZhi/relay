@@ -6,3 +6,5 @@
  * a copy of the server that differs from the CLI's.
  */
 export { DemoControlRoomSource, RelayControlRoomSource, startControlRoom } from '@agent-relay/control-room';
+export { createObserverToken } from '@agent-relay/sdk';
+export { default as ObserverWebSocket } from '../lib/observer-websocket.mjs';

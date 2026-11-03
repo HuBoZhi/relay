@@ -77,6 +77,22 @@ function notFoundResponse() {
   return { ok: false, status: 404, json: async () => ({ ok: false }) } as Response;
 }
 
+it('reports the observer socket lifecycle instead of replaying historical connection state',async()=>{
+  const sockets:any[]=[];
+  class Socket {onopen:any;onclose:any;onmessage:any;onerror:any;close(){}constructor(){sockets.push(this)}}
+  const source=createObserverEventSource({observerToken:'ot_live_fixture',webSocketImpl:Socket as any,
+    fetch:createBackfillFetch([{seq:1,payload:{type:'close'}}])});
+  const received=collect(source);
+  source.connect();await settle();
+  try{
+    expect(received.some(e=>e.type==='disconnected')).toBe(false);
+    sockets[0].onopen();
+    expect(received.at(-1)?.type).toBe('connected');
+    sockets[0].onclose({code:1000,wasClean:true});
+    expect(received.at(-1)?.type).toBe('disconnected');
+  }finally{await source.disconnect()}
+});
+
 /** Serve pages of the given log rows keyed off the `since` query parameter. */
 function createBackfillFetch(rows: Record<string, unknown>[], latestSeq?: number) {
   const latest = latestSeq ?? (rows.length > 0 ? (rows[rows.length - 1].seq as number) : 0);

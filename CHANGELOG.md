@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room-desktop`: restore realtime updates with a cached read-only stream credential and a Node 20 compatible WebSocket; observer connection status now follows the active socket instead of historical events.
+
 - `@agent-relay/control-room-desktop`: reconnect to the configured workspace after Windows sign-in, retaining tray-only startup, the web address, and local profile paths without storing credentials in the startup command.
 
 ### Removed

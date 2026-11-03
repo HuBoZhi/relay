@@ -30,7 +30,9 @@ const {
 
 // Keep the installed app's profile, logs, and child-process scratch alongside its
 // explicitly selected local profile, including launches from Windows login.
-const profilePath = app.commandLine.getSwitchValue('user-data-dir');
+const profileFlagIndex=process.argv.indexOf('--user-data-dir');
+const profilePath = app.commandLine.getSwitchValue('user-data-dir') ||
+  (profileFlagIndex>=0 ? process.argv[profileFlagIndex+1] : '');
 if (profilePath) {
   const temporaryPath = join(profilePath, 'temp');
   mkdirSync(temporaryPath, { recursive: true });
@@ -394,6 +396,7 @@ async function start() {
 
   try {
     config = configModule.resolveConfig();
+    config.profilePath = app.getPath('userData');
   } catch (error) {
     dialog.showErrorBox('无法启动协作控制中心', error instanceof Error ? error.message : String(error));
     app.exit(1);

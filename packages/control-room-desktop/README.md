@@ -117,6 +117,9 @@ npm run package:win -w @agent-relay/control-room-desktop
 
 ## 注意
 
+- Windows 桌面运行时使用打包的 WebSocket 实现；REST 工作区密钥和实时订阅的只读观察者令牌分开使用。后者缓存于本机用户数据目录的 `observer.private.json`，不会发给网页。当前托管网关要求观察者令牌用于 WebSocket upgrade URL，这个地址只存在于主进程网络连接，不是浏览器访问地址，也不记录到日志。其他部署继续使用请求头认证。
+- 当前连接状态取自实际观察者 socket 的打开/关闭事件，历史连接事件不会改写当前连接状态。订阅失败时仍如实降级，不通过更改状态标签掩盖失败。
+
 - 桌面版和服务一样只监听回环地址，凭据留在进程内，浏览器拿不到。
 - 在设置了 `ELECTRON_RUN_AS_NODE=1` 的终端里跑 `electron` 会退化成普通 Node 进程，
   表现为 `require('electron')` 拿到的是路径字符串；本地调试请先 `unset ELECTRON_RUN_AS_NODE`。
