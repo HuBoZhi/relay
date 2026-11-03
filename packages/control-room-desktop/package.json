@@ -14,7 +14,8 @@
     "start": "npm run build && electron .",
     "smoke": "npm run build && electron . --smoke",
     "package:win": "npm run build && electron-builder --win --publish never",
-    "test": "vitest run --root ../.. packages/control-room-desktop/"
+    "test": "vitest run --root ../.. packages/control-room-desktop/",
+    "test:lifetime": "node --test tests/service-lifetime.node-test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

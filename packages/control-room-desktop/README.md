@@ -25,6 +25,30 @@ RELAY_CONTROL_ROOM_TOKEN=ot_live_… npm run start -w @agent-relay/control-room-
 
 ## 参数与环境变量
 
+### Windows 统一启动与驻留
+
+已有 `D:\Programs\AgentRelay` 本地适配器和控制台部署时，把 `scripts/Start-RelaySystem.ps1`
+与 `scripts/Start-ControlRoomService.ps1` 一起放到适配器目录，由原来的登录入口调用
+`Start-RelaySystem.ps1`。它复用现有工作区，不创建新工作区。
+
+控制台由 Windows 桌面 Shell 启动的独立监护进程管理，启动终端或自动化任务结束后继续驻留。
+监护进程接管已有控制台；退出后按退避间隔重启，重复启动只保留一个监护进程。
+统一模式下，菜单“退出”也会触发重新拉起；需要停止本地控制台及监护时，使用：
+
+```powershell
+& D:\Programs\AgentRelay\Start-ControlRoomService.ps1 -Action Stop
+& D:\Programs\AgentRelay\Start-ControlRoomService.ps1 -Action Start
+& D:\Programs\AgentRelay\Start-ControlRoomService.ps1 -Action Status
+```
+
+实时进程状态记录在控制台目录的 `data/console-service-status.json`，退出与重启日志在
+`logs/console-service.log`；`running` 只表示进程仍在，服务就绪须另查 `/api/health`，
+工作区连接须查 `/api/bootstrap`。这些脚本依赖 Windows 交互桌面，不是 Windows 系统服务，
+不会跨用户注销保持运行，也不会重启适配器客户端或停止云端 Relaycast。
+
+生命周期回归测试：先把 `TEMP`、`TMP`、`TMPDIR` 设置到本次 D 盘临时目录，再运行
+`npm run test:lifetime -w @agent-relay/control-room-desktop`。
+
 | 参数            | 说明                                               |
 | --------------- | -------------------------------------------------- |
 | `--port <端口>` | 本地监听端口，默认 `4320`；被占用时自动向后顺延    |
