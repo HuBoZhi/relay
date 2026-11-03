@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `relay-agent-connect`: share a global desktop Relay skill across local agents, select project/model sessions, and configure ZCode/WorkBuddy loopback APIs at sign-in and manual startup.
+
 - `scripts/desktop-relay`: call WorkBuddy and ZCode desktop sessions through Relay Actions and local CDP-to-IPC/SDK adapters, returning correlated results without mouse, keyboard, or DOM automation.
 
 - `@agent-relay/control-room`: a read-only collaboration control room. `node packages/control-room/dist/cli.js` serves a loopback-only web console that shows channels, evidenced agent work state, host placement, and live message flow. Credentials stay in the local process; the browser only receives view models. `--demo` runs the same interface on built-in Chinese demo data.

@@ -3,6 +3,25 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { WorkBuddyDesktop, ZCodeDesktop } from './native-clients.mjs';
 
+test('ZCode creates a task in the requested project with the complete selected model', async () => {
+  const model={providerId:'desktop-provider',modelId:'deepseek-flash',options:{reasoningLevel:'max'}};
+  const client=new ZCodeDesktop({}, undefined, {workspace:'G:/projects/example',model});
+  let params;
+  client.call=async (_service, method, input) => {assert.equal(method,'createTask');params=input;return {taskId:'new-session'};};
+  await client.createSession();
+  assert.equal(params.workspacePath,'G:/projects/example');
+  assert.deepEqual(params.modelSelection,model);
+});
+
+test('ZCode does not send a prompt into a saved session with a different model', async () => {
+  const client=new ZCodeDesktop({},'saved',{workspace:'G:/projects/example',model:{providerId:'p',modelId:'wanted'}});
+  client.call=async (_service, method) => {
+    assert.equal(method,'readSession');
+    return {session:{workspace:{workspacePath:'G:/projects/example'},status:'idle',model:{providerId:'p',modelId:'other'}}};
+  };
+  await assert.rejects(()=>client.submit('saved','hello'),/model mismatch/);
+});
+
 for (const Client of [WorkBuddyDesktop, ZCodeDesktop]) {
   test(`${Client.name} rejects a task addressed to another session before IPC`, async () => {
     const client = new Client({ evaluate() { throw Error('Must not call IPC'); } }, 'owned-session');

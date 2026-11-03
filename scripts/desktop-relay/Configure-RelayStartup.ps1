@@ -19,7 +19,8 @@ if($Action -eq 'Configure'){
     $record.run[$app.Name]=$old
     $args="--remote-debugging-port=$($app.Port) --remote-debugging-address=127.0.0.1"
     # Keep original shortcut targets, icon, working directory, and unrelated arguments.
-    $roots=@([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('CommonPrograms'),[Environment]::GetFolderPath('Startup')) | Select-Object -Unique
+    $taskbar=Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar'
+    $roots=@([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('CommonDesktopDirectory'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('CommonPrograms'),[Environment]::GetFolderPath('Startup'),$taskbar) | Where-Object {Test-Path -LiteralPath $_} | Select-Object -Unique
     foreach($link in (Get-ChildItem -LiteralPath $roots -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue)){
       $shortcut=$shell.CreateShortcut($link.FullName)
       if($shortcut.TargetPath -ine $app.Exe){continue}
