@@ -91,10 +91,11 @@ foreach($app in $apps){
   if($app.Key -eq 'factory'){& $factoryLauncher -RuntimeRoot $RuntimeRoot;Write-Output 'Factory: started with Relay interface';continue}
   $scratch=Join-Path 'D:\CodexTemp' ('relay-desktop-host-'+[guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path $scratch | Out-Null
-  $keys=@('TEMP','TMP','TMPDIR','WORKBUDDY_REMOTE_DEBUGGING_PORT','ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT');$previous=@{}
+  $keys=@('TEMP','TMP','TMPDIR','WORKBUDDY_REMOTE_DEBUGGING_PORT','ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT','ELECTRON_RUN_AS_NODE');$previous=@{}
   foreach($key in $keys){$previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process')}
   try {
     $env:TEMP=$scratch;$env:TMP=$scratch;$env:TMPDIR=$scratch
+    $env:ELECTRON_RUN_AS_NODE=$null
     $env:WORKBUDDY_REMOTE_DEBUGGING_PORT='19371';$env:ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT='1'
     $p=Start-Process -FilePath $app.Exe -ArgumentList "--remote-debugging-port=$($app.Port)",'--remote-debugging-address=127.0.0.1' -WindowStyle Hidden -PassThru
     @{app=$app.Name;pid=$p.Id;temporaryDirectory=$scratch;cleanup='Remove only after this application and children exit.'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RuntimeRoot "data/desktop-host-$($p.Id).json")

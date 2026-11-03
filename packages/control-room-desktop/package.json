@@ -15,7 +15,8 @@
     "smoke": "npm run build && electron . --smoke",
     "package:win": "npm run build && electron-builder --win --publish never",
     "test": "vitest run --root ../.. packages/control-room-desktop/",
-    "test:lifetime": "node --test tests/service-lifetime.node-test.mjs tests/hidden-launch.node-test.mjs"
+    "test:lifetime": "node --test tests/service-lifetime.node-test.mjs tests/hidden-launch.node-test.mjs",
+    "test:recovery": "node --test tests/relay-recovery.node-test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

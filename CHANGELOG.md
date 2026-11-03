@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/control-room-desktop`: Windows login and desktop task entry points automatically start stopped clients and restart clients with missing Relay interfaces once, recording recovery results and reusing healthy clients.
+
 - `@agent-relay/control-room-desktop`: the Windows Factory launcher runs through an independent hidden host and writes client logs to files, allowing the Relay startup terminal to close.
 
 - `@agent-relay/control-room-desktop`: Windows unified-start scripts can keep the console under an independent supervisor, restart it after process exit, and expose an explicit stop command and lifecycle log.
