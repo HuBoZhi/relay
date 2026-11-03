@@ -7,13 +7,15 @@ export class DesktopIpcTransport {
 
   static async connect({ port, client, fetch: get = globalThis.fetch,
     WebSocket: Socket = globalThis.WebSocket, timeoutMs = 15_000 }) {
-    if (!['workbuddy', 'zcode'].includes(client)) throw new Error('Unsupported desktop client');
+    if (!['workbuddy', 'zcode', 'factory'].includes(client)) throw new Error('Unsupported desktop client');
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid local port');
     const response = await get(`http://127.0.0.1:${port}/json/list`, {
       signal: AbortSignal.timeout(timeoutMs), redirect: 'error',
     });
     if (!response.ok) throw new Error('Desktop debugger discovery failed');
-    const path = client === 'zcode'
+    const path = client === 'factory'
+      ? /\/factory\/app-[\d.]+\/resources\/app\.asar\/\.vite\/renderer\/main_window\/index\.html$/i
+      : client === 'zcode'
       ? /\/zcode\/resources\/app\.asar\/out\/renderer\/index\.html$/i
       : /\/workbuddy\/resources\/app\.asar\/renderer\/index\.html$/i;
     const targets = (await response.json()).filter(target => {
