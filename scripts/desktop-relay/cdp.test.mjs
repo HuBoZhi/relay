@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DesktopIpcTransport } from './cdp.mjs';
 
+test('Factory accepts only its packaged main renderer and a loopback debugger', async () => {
+  class Socket extends EventTarget {
+    constructor() { super(); queueMicrotask(() => this.dispatchEvent(new Event('open'))); }
+    close() {}
+  }
+  const target = { type: 'page',
+    url: 'file:///C:/Users/example/AppData/Local/Factory/app-1.2.0/resources/app.asar/.vite/renderer/main_window/index.html#/sessions/example',
+    webSocketDebuggerUrl: 'ws://127.0.0.1:19373/devtools/page/1' };
+  const connect = () => DesktopIpcTransport.connect({ client: 'factory', port: 19373, WebSocket: Socket,
+    fetch: async () => ({ ok: true, json: async () => [target] }) });
+  (await connect()).close();
+  target.type = 'webview';
+  await assert.rejects(connect, /desktop target/);
+  target.type = 'page';
+  target.webSocketDebuggerUrl = 'ws://127.0.0.1:9999/devtools/page/1';
+  await assert.rejects(connect, /Untrusted/);
+});
+
 test('refuses a target outside the requested desktop app', async () => {
   await assert.rejects(() => DesktopIpcTransport.connect({ port: 19371, client: 'workbuddy',
     fetch: async () => ({ ok: true, json: async () => [{ type: 'page', url: 'https://example.com/', webSocketDebuggerUrl: 'ws://127.0.0.1:19371/devtools/page/1' }] }) }), /desktop target/);

@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory=$true)][ValidateSet('workbuddy','zcode')][string]$Client,
+  [Parameter(Mandatory=$true)][ValidateSet('workbuddy','zcode','factory')][string]$Client,
   [string]$TaskFile,
   [string]$RuntimeRoot='D:\Programs\AgentRelay'
 )

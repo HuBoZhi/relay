@@ -1,0 +1,37 @@
+{
+  "id": "compact_t1efliby74a8",
+  "version": 1,
+  "type": "compacted",
+  "compactedAt": "2026-11-03T02:58:56.150Z",
+  "sourceTrajectories": [
+    "traj_ox6dpxavhkv7"
+  ],
+  "dateRange": {
+    "start": "2026-11-03T02:46:07.003Z",
+    "end": "2026-11-03T02:58:21.487Z"
+  },
+  "summary": {
+    "totalDecisions": 1,
+    "totalEvents": 1,
+    "uniqueAgents": [
+      "default"
+    ]
+  },
+  "decisionGroups": [
+    {
+      "category": "api",
+      "decisions": [
+        {
+          "question": "Use the Factory preload daemon bridge over loopback CDP; keep the desktop sign-in token inside the renderer",
+          "chosen": "Use the Factory preload daemon bridge over loopback CDP; keep the desktop sign-in token inside the renderer",
+          "reasoning": "Factory uses a private parent-child IPC channel. The exposed electronAPI.daemon bridge reaches its existing daemon without another CLI or UI automation. User authorized restart and Factory-only C drive session/log writes.",
+          "fromTrajectory": "traj_ox6dpxavhkv7"
+        }
+      ]
+    }
+  ],
+  "keyLearnings": [],
+  "keyFindings": [],
+  "filesAffected": [],
+  "commits": []
+}

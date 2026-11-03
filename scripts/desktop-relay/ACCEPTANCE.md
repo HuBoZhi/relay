@@ -1,5 +1,21 @@
 # 桌面直连验收
 
+## Factory 接入（2026-11-03，Asia/Shanghai）
+
+- 用户本轮授权重启 Factory，并明确允许 Factory 自身保存接入必要的 C 盘会话和日志。Relay 代码、回执、临时目录与测试缓存仍位于 D/G 盘。
+- 最终验收版本为 Factory 1.2.0，原生协议 `1.291.0`，本机端口 `19373`。首次启动的 1.1.0 被应用自动更新到 1.2.0，自动重启时丢失调试参数；随后对当前版本重新启用端口。没有修改客户端安装文件或调用 UI 输入。
+- 路径为 Relay Action → 本机 CDP Runtime → `electronAPI.daemon.sendMessage/onMessage` → Factory 自带 Droid daemon。没有启动独立 Droid CLI。登录令牌仅在 renderer 内传给原生 daemon，不回传给 Relay。
+- 专用会话：`e90cad0c-fbc1-4748-b4bf-bbe79b0f9870`；工作目录：`D:/Programs/AgentRelay/desktop-workspace`；Action：`desktop.factory.execute`。
+- 算术探针：`inv_idem_e459f79ce46f11cf49e5053e01d5fcae697b7396b1554e02aa7128961ac2deaa`，返回 `RELAY_DESKTOP_3def83f1-6f95-40ee-91c3-7929076e85fd:437`，`mode=probe / ok=true`。
+- Markdown 复用同一会话：`inv_idem_f0d446301bd14f5ead4160a03f27080569f422b569865abce8a8db0b85967deb`，返回 `NATIVE_MARKDOWN_TASK_V2_READY`，`mode=task / ok=true`。经已安装 PowerShell 入口完整投递、轮询、Relay 回执核验通过。
+- 最终协议 `1.291.0` 复测：`inv_idem_239b14443495e76b9dc8010042253cc326727911995617ad720eb95018d6c669`，返回 `RELAY_DESKTOP_c4ef898e-3354-4e8f-8b60-378a1c698ce9:437`，`mode=probe / ok=true`。
+- Factory 用会话 ID 与本轮消息 ID 查询原生 turn outcome，并校验 outcome 内的 turn ID；只有原生 `reason=completed` 才计为完成。错误、额度耗尽或其他结束原因不计为成功。单元测试覆盖错误关联、历史轮次、忙碌会话、工作目录、新会话权限和会话恢复；共 17 项通过。两个 PowerShell 入口通过语法解析，Factory 启动入口已实机验证 ready 检测且未重复重启。
+- 当前限制仍为按需执行，无常驻收件服务；Factory 专用会话关闭自动权限批准并自动拒绝权限请求，仅验收无工具任务。未验收文件编辑、构建或部署。
+- 结构化回执保留于 `D:/Programs/AgentRelay/reports/factory-desktop-native-<UUID>.json`，最近成功回执为 `factory-desktop-native-via-relay.json`。
+- 当前 Factory 进程运行所需的 D 盘临时目录保留，记录于 `D:/Programs/AgentRelay/data/desktop-host-36348.json`，待该进程及其子进程退出后清理。
+
+## WorkBuddy 与 ZCode 初始验收
+
 核查日期：2026-10-31，Asia/Shanghai。
 
 | 项目 | WorkBuddy | ZCode |
