@@ -42,6 +42,8 @@
             工作中 <span id="filter-count-active">--</span></button
           ><button data-filter="warning" aria-pressed="false">
             待关注 <span id="filter-count-warning">--</span>
+          </button><button data-filter="archived" aria-pressed="false">
+            归档 <span id="filter-count-archived">0</span>
           </button>
         </div>
         <nav id="channel-list" class="channel-list" aria-label="频道列表"></nav>
@@ -97,7 +99,7 @@
         <section class="overview-heading">
           <div>
             <div class="eyebrow" id="page-eyebrow">多智能体协作观察</div>
-            <h1><span id="page-title">协作控制中心</span><span class="heading-dot"></span><button id="rename-channel" class="button" hidden>修改名称</button></h1>
+            <h1><span id="page-title">协作控制中心</span><span class="heading-dot"></span><button id="rename-channel" class="button" hidden>修改名称</button><details id="theme-management" class="theme-management" hidden><summary class="button">主题管理</summary><div class="theme-management-menu"><button id="archive-channel" type="button">在本机归档</button><button id="restore-channel" type="button" hidden>恢复到主题列表</button><button id="delete-channel" class="danger-action" type="button">从本机删除</button><small>仅整理本机界面，服务端消息保留。</small></div></details></h1>
             <p id="overview-subtitle">全局频道状态、智能体任务与消息流转</p>
             <form id="rename-form" class="rename-form" hidden>
               <label for="channel-name-input">主题名称</label>
@@ -351,6 +353,13 @@
       <div class="help-note">
         状态含义：「执行中」来自任务事件；「近期有消息」只表示频道有新消息，不代表正在执行；信息不足时显示「未知」，不会当作空闲。快捷键：斜杠键搜索频道，退出键关闭弹窗。
       </div>
+    </dialog>
+    <dialog id="delete-channel-dialog" class="theme-delete-dialog" aria-labelledby="delete-channel-title" aria-describedby="delete-channel-description">
+      <form id="delete-channel-form">
+        <h2 id="delete-channel-title">从本机删除主题</h2>
+        <p id="delete-channel-description"></p>
+        <div class="theme-delete-actions"><button id="delete-channel-cancel" class="button" type="button" autofocus>取消</button><button class="button danger-action" type="submit">确认从本机删除</button></div>
+      </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./icons.js"></script>

@@ -176,6 +176,85 @@ describe('control room renderer', () => {
     expect(view.count('#channel-list .selected')).toBe(0);
   }, 20_000);
 
+  it('archives locally, preserves history across refreshes, and restores from the archive', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    const bootstrap = await source.bootstrap();
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    view.click('#archive-channel');
+    expect(view.window.document.body.dataset.page).toBe('overview');
+    expect(view.count('[data-channel="engineering"]')).toBe(0);
+    expect(view.count('#network [data-graph-channel="engineering"]')).toBe(0);
+    expect(view.text('#filter-count-archived')).toBe('1');
+    expect(view.text('#recent-activity')).not.toContain('#工程研发');
+    view.stream('agents', bootstrap);
+    view.stream('bootstrap', { bootstrap });
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(view.count('[data-channel="engineering"]')).toBe(0);
+    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
+    view.close(); view = await render(server.url, { storage });
+    view.click('[data-filter="archived"]');
+    expect(view.count('[data-channel="engineering"]')).toBe(1);
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(view.count('#message-timeline .message')).toBeGreaterThan(0);
+    expect((view.window.document.querySelector('#date-filter') as HTMLSelectElement).value).toBe('all');
+    view.click('#restore-channel');
+    expect(view.count('[data-channel="engineering"]')).toBe(1);
+    expect(view.text('#filter-count-archived')).toBe('0');
+    expect((await source.bootstrap()).channels).toEqual(bootstrap.channels);
+    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } } });
+    expect(view.text('#filter-count-archived')).toBe('0');
+    await new Promise((settle) => setTimeout(settle, 300));
+  }, 20_000);
+
+  it('confirms local deletion and keeps deleted themes hidden after refresh without deleting source history', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    const proto = view.window.HTMLDialogElement.prototype;
+    proto.showModal = function () { this.open = true; };
+    proto.close = function () { this.open = false; this.dispatchEvent(new view!.window.Event('close')); };
+    const bootstrap = await source.bootstrap();
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    view.click('#delete-channel');
+    expect(view.text('#delete-channel-description')).toContain('服务端主题和消息会保留');
+    view.click('#delete-channel-cancel');
+    expect(view.count('[data-channel="engineering"]')).toBe(1);
+    view.click('#delete-channel');
+    view.window.document.querySelector('#delete-channel-form')!.dispatchEvent(new view.window.Event('submit', { cancelable: true }));
+    expect(view.count('[data-channel="engineering"]')).toBe(0);
+    view.click('[data-filter="archived"]');
+    expect(view.count('[data-channel="engineering"]')).toBe(0);
+    view.stream('bootstrap', { bootstrap });
+    await new Promise((settle) => setTimeout(settle, 300));
+    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
+    view.close(); view = await render(server.url, { storage });
+    expect(view.count('[data-channel="engineering"]')).toBe(0);
+    expect(view.count('#network [data-graph-channel="engineering"]')).toBe(0);
+    expect((await source.bootstrap()).channels).toEqual(bootstrap.channels);
+    expect((await source.messages('engineering', { limit: 50 })).messages.length).toBeGreaterThan(0);
+    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } } });
+    expect(view.count('[data-channel="engineering"]')).toBe(1);
+    await new Promise((settle) => setTimeout(settle, 300));
+  }, 20_000);
+
+  it('does not hide a theme when organization settings cannot be saved', async () => {
+    source = new DemoControlRoomSource({ tickMs: 600_000 });
+    server = await startHttpTestServer({ source, log: () => {} });
+    view = await render(server.url);
+    view.click('[data-channel="engineering"]');
+    await new Promise((settle) => setTimeout(settle, 300));
+    Object.defineProperty(view.window.Storage.prototype, 'setItem', { value() { throw new Error('quota'); } });
+    view.click('#archive-channel');
+    expect(view.count('[data-channel="engineering"]')).toBe(1);
+    expect(view.text('#filter-count-archived')).toBe('0');
+    expect(view.text('#toast')).toContain('操作保存失败');
+  }, 20_000);
+
   it('saves theme names across refreshes, isolates workspaces, and restores the original name', async () => {
     source = new DemoControlRoomSource({ tickMs: 600_000 });
     server = await startHttpTestServer({ source, log: () => {} });

@@ -58,6 +58,7 @@ const state = {
   notice: null,
   channel: null,
   channelAliases: new Map(),
+  channelOrganization: new Map(),
   agent: null,
   filter: 'all',
   channelSearch: '',
@@ -90,7 +91,10 @@ const state = {
 
 /* ------------------------------------------------------------------ helpers */
 
-const currentChannel = () => state.channels.find((channel) => channel.name === state.channel) || null;
+const currentChannel = () => state.channels.find((channel) => channel.name === state.channel && state.channelOrganization.get(channel.name) !== 'deleted') || null;
+const activeChannels = () => state.channels.filter((channel) => !state.channelOrganization.has(channel.name));
+const archivedLocally = (channel) => channel && state.channelOrganization.get(channel.name) === 'archived';
+const visibleActivity = (message) => !state.channelOrganization.has(message.channel);
 const channelLabel = (name, fallback = name) =>
   state.channels.find((channel) => channel.name === name)?.displayName || fallback;
 const recipientLabel = (message) =>
@@ -100,6 +104,43 @@ const recipientLabel = (message) =>
 
 function aliasStorageKey() {
   return `relay.channel-names:${JSON.stringify([state.mode, state.connection?.target, state.workspace?.id || state.workspace?.name])}`;
+}
+
+function organizationStorageKey() { return aliasStorageKey().replace('relay.channel-names:', 'relay.channel-organization:'); }
+
+function readChannelOrganization() {
+  try {
+    const entries = JSON.parse(localStorage.getItem(organizationStorageKey()) || '[]');
+    state.channelOrganization = new Map(Array.isArray(entries) ? entries.filter((entry) =>
+      Array.isArray(entry) && typeof entry[0] === 'string' && ['archived', 'deleted'].includes(entry[1])) : []);
+  } catch { state.channelOrganization = new Map(); }
+}
+
+function organizeChannel(action, name = state.channel) {
+  if (!['archived', 'deleted', 'restore'].includes(action)) return false;
+  if (!state.channels.some(channel => channel.name === name)) return false;
+  const organization = new Map(state.channelOrganization);
+  if (action === 'restore') organization.delete(name);
+  else organization.set(name, action);
+  try { localStorage.setItem(organizationStorageKey(), JSON.stringify([...organization])); }
+  catch { toast('操作保存失败，请检查本机存储是否可用'); return false; }
+  state.channelOrganization = organization;
+  if (action !== 'restore') {
+    state.messageAbort?.abort();
+    state.messageRequest += 1;
+    state.loadingMessages = false;
+    state.channel = null;
+    state.agent = null;
+    state.pending = 0;
+    $('#pending-messages')?.remove();
+    state.view = 'global';
+  } else {
+    state.filter = 'all';
+  }
+  renderAll();
+  toast(action === 'archived' ? '已在本机归档，可从归档区恢复' : action === 'deleted' ? '已从本机移除，服务端消息保留' : '已恢复到主题列表');
+  $('#overview-button').focus();
+  return true;
 }
 
 function readChannelAliases() {
@@ -283,6 +324,7 @@ function applyBootstrap(data) {
   state.workspace = data.workspace;
   state.connection = data.connection;
   readChannelAliases();
+  readChannelOrganization();
   state.channels = applyChannelAliases(data.channels || []);
   state.agents = data.agents || [];
   state.nodes = data.nodes || [];
@@ -291,12 +333,12 @@ function applyBootstrap(data) {
   state.notice = data.notice;
   state.recent = (data.recentMessages || []).slice(0, 6);
 
-  const stillThere = state.channels.some((channel) => channel.name === previousChannel);
+  const stillThere = state.channels.some((channel) => channel.name === previousChannel && state.channelOrganization.get(channel.name) !== 'deleted');
   if (!stillThere) {
     // Archived channels keep their history but are the worst default: nothing
     // there is live, so only fall back to one when nothing else exists.
-    const live = state.channels.filter((channel) => !channel.archived);
-    const pool = live.length > 0 ? live : state.channels;
+    const live = activeChannels().filter((channel) => !channel.archived);
+    const pool = live.length > 0 ? live : activeChannels();
     const preferred =
       pool.find((channel) => channel.state === 'attention') ||
       pool.find((channel) => channel.state === 'active') ||
@@ -336,6 +378,10 @@ function renderPage() {
   const overview = state.view === 'global';
   const channel = currentChannel();
   $('#rename-channel').hidden = overview || !channel;
+  $('#theme-management').hidden = overview || !channel;
+  if (overview) $('#theme-management').open = false;
+  $('#archive-channel').hidden = !channel || archivedLocally(channel);
+  $('#restore-channel').hidden = !channel || !archivedLocally(channel);
   if (overview) $('#rename-form').hidden = true;
   document.body.dataset.page = overview ? 'overview' : 'channel';
   $('.metrics').hidden = !overview;
@@ -346,7 +392,7 @@ function renderPage() {
   $('#overview-button').setAttribute('aria-pressed', String(overview));
   $('#breadcrumb-current').textContent = overview ? '系统总览' : channel ? `# ${channel.displayName}` : '频道详情';
   $('#page-title').textContent = overview ? '协作控制中心' : channel ? `# ${channel.displayName}` : '频道详情';
-  $('#page-eyebrow').textContent = overview ? '多智能体协作观察' : '频道协作空间';
+  $('#page-eyebrow').textContent = overview ? '多智能体协作观察' : archivedLocally(channel) ? '本机归档主题' : '频道协作空间';
   $('#overview-subtitle').textContent = overview
     ? `全局频道状态、智能体任务与消息流转 · ${zoneLabel()}`
     : channel?.topic || '该频道的参与节点、工作状态与消息记录';
@@ -404,8 +450,10 @@ function renderWorkspace() {
 /* ---------------------------------------------------------------- channels */
 
 function matchesChannel(channel) {
+  if (state.channelOrganization.get(channel.name) === 'deleted') return false;
+  if ((state.filter === 'archived') !== archivedLocally(channel)) return false;
   const query = state.channelSearch.trim().toLowerCase();
-  if (state.filter !== 'all') {
+  if (state.filter !== 'all' && state.filter !== 'archived') {
     const wanted = state.filter;
     const mapped = channel.state === 'attention' ? 'warning' : channel.state;
     if (mapped !== wanted) return false;
@@ -415,13 +463,19 @@ function matchesChannel(channel) {
 }
 
 function renderChannels() {
-  const total = state.channels.length;
-  const working = state.channels.filter((channel) => channel.state === 'active').length;
-  const attention = state.channels.filter((channel) => channel.state === 'attention').length;
+  const total = activeChannels().length;
+  const working = activeChannels().filter((channel) => channel.state === 'active').length;
+  const attention = activeChannels().filter((channel) => channel.state === 'attention').length;
   $('#channel-total').textContent = String(total).padStart(2, '0');
   $('#filter-count-all').textContent = String(total);
   $('#filter-count-active').textContent = String(working);
   $('#filter-count-warning').textContent = String(attention);
+  $('#filter-count-archived').textContent = String(state.channels.filter(archivedLocally).length);
+  $$('[data-filter]').forEach(button => {
+    const active = button.dataset.filter === state.filter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
 
   const list = state.channels.filter(matchesChannel);
   $('#channel-list').innerHTML = list.length
@@ -439,22 +493,23 @@ function renderChannels() {
             channel.name
           )}" data-status="${channelClass(channel)}" aria-pressed="${selected}" aria-label="${esc(
             channel.displayName
-          )}，${esc(channel.stateLabel)}"><span class="hash">#</span><span class="channel-info"><strong>${esc(
+            )}，${esc(archivedLocally(channel) ? '本机已归档' : channel.stateLabel)}"><span class="hash">#</span><span class="channel-info"><strong>${esc(
             channel.displayName
           )}</strong><small><i class="status-dot ${channelClass(channel)}"></i>${
             channel.memberCount
-          } 个智能体<span>· ${esc(channel.stateLabel)}</span></small></span><span class="channel-spark" aria-hidden="true">${bars}</span></button>`;
+            } 个智能体<span>· ${esc(archivedLocally(channel) ? '本机已归档' : channel.stateLabel)}</span></small></span><span class="channel-spark" aria-hidden="true">${bars}</span></button>`;
         })
         .join('')
     : `<p class="empty-state">${
-        state.channels.length === 0 ? '暂无可见频道，或尚未成功读取频道列表' : '未找到匹配的频道'
+        state.filter === 'archived' ? '暂无本机归档主题' : state.channels.length === 0 ? '暂无可见频道，或尚未成功读取频道列表' : total === 0 ? '暂无可见主题，可在归档区查看历史主题' : '未找到匹配的频道'
       }</p>`;
 }
 
 function selectChannel(name, agent = null) {
-  if (!state.channels.some((channel) => channel.name === name)) return;
+  if (!state.channels.some((channel) => channel.name === name) || state.channelOrganization.get(name) === 'deleted') return;
   const changed = name !== state.channel;
   $('#rename-form').hidden = true;
+  $('#theme-management').open = false;
   state.channel = name;
   state.view = 'channel';
   state.agent = agent;
@@ -466,7 +521,7 @@ function selectChannel(name, agent = null) {
   if (changed) {
     state.expanded.clear();
     $('#message-search').value = '';
-    $('#date-filter').value = currentChannel()?.archived ? 'all' : 'today';
+    $('#date-filter').value = currentChannel()?.archived || archivedLocally(currentChannel()) ? 'all' : 'today';
     $('#sender-filter').value = 'all';
     state.messageError = null;
     state.nextBefore = null;
@@ -517,7 +572,7 @@ function renderMetrics() {
 
   const attention = metrics.channelsAttention;
   $('#metric-attention').textContent = attention === null ? '--' : String(attention).padStart(2, '0');
-  const attentionChannel = state.channels.find((channel) => channel.state === 'attention');
+  const attentionChannel = activeChannels().find((channel) => channel.state === 'attention');
   const link = $('#alert-link');
   const note = $('#metric-attention-note');
   if (attentionChannel) {
@@ -575,7 +630,7 @@ function renderTraffic() {
 /* ---------------------------------------------------------------- topology */
 
 function layoutGlobal() {
-  const channels = state.channels;
+  const channels = activeChannels();
   const count = channels.length || 1;
   const cx = 450;
   const cy = 220;
@@ -740,7 +795,7 @@ function renderGraph() {
 
     svg.setAttribute('viewBox', '0 0 900 440');
     $('#graph-coordinate-right').innerHTML =
-      `${String(state.channels.length).padStart(2, '0')} 个频道<br><span>${
+      `${String(activeChannels().length).padStart(2, '0')} 个频道<br><span>${
         state.agents.length
       } 个智能体</span>`;
   } else if (channel) {
@@ -1246,7 +1301,8 @@ function cssEscape(value) {
 // A single bounded pulse represents an observed event. Membership alone never animates.
 function pulseMessage(message) {
   if (reduced.matches || state.paused || document.hidden) return;
-  const index = state.channels.findIndex((channel) => channel.name === message.channel);
+  if (!visibleActivity(message)) return;
+  const index = activeChannels().findIndex((channel) => channel.name === message.channel);
   if (index < 0 || (state.view === 'channel' && message.channel !== state.channel)) return;
   const paths = state.view === 'global'
     ? [$(`#flow-${index}`)]
@@ -1293,8 +1349,8 @@ function applyAgentsFrame(frame) {
   state.channels = applyChannelAliases(frame.channels || []);
   state.metrics = frame.metrics || state.metrics;
   state.connection = frame.connection || state.connection;
-  if (!state.channels.some((channel) => channel.name === state.channel)) {
-    const next = state.channels.find((channel) => !channel.archived) || state.channels[0];
+  if (!currentChannel()) {
+    const next = activeChannels().find((channel) => !channel.archived) || activeChannels()[0];
     if (next) {
       const previousView = state.view;
       selectChannel(next.name);
@@ -1482,11 +1538,12 @@ function moveMessage(offset) {
 
 function renderRecent() {
   const container = $('#recent-activity');
-  if (!state.recent.length) {
+  const recent = state.recent.filter(visibleActivity);
+  if (!recent.length) {
     container.innerHTML = '<p class="empty-state">暂无消息流转记录</p>';
     return;
   }
-  container.innerHTML = state.recent
+  container.innerHTML = recent
     .map(
       (message) =>
         `<button class="activity-row" data-activity-message="${esc(message.id)}" aria-label="查看 ${esc(
@@ -1517,6 +1574,48 @@ function setTab(tab) {
 
 /* ------------------------------------------------------------------ events */
 
+$('#archive-channel').onclick = () => organizeChannel('archived');
+$('#theme-management').onkeydown = (event) => {
+  if (event.key === 'Escape') {
+    event.stopPropagation();
+    $('#theme-management').open = false;
+    $('#theme-management > summary').focus();
+  }
+};
+document.addEventListener('click', (event) => {
+  if (!$('#theme-management').contains(event.target)) $('#theme-management').open = false;
+});
+$('#restore-channel').onclick = () => {
+  if (organizeChannel('restore')) $('#theme-management').open = false;
+};
+let deleteTarget = null;
+$('#delete-channel').onclick = () => {
+  const channel = currentChannel();
+  if (!channel) return;
+  deleteTarget = { name: channel.name, key: organizationStorageKey() };
+  $('#delete-channel-description').textContent = `将“${channel.displayName}”从本机列表和拓扑中移除。服务端主题和消息会保留，其他成员不受影响。`;
+  $('#theme-management').open = false;
+  $('#delete-channel-dialog').showModal();
+  $('#delete-channel-cancel').focus();
+};
+$('#delete-channel-cancel').onclick = () => $('#delete-channel-dialog').close();
+$('#delete-channel-form').onsubmit = (event) => {
+  event.preventDefault();
+  if (!deleteTarget || deleteTarget.key !== organizationStorageKey()) {
+    $('#delete-channel-dialog').close();
+    toast('工作空间已切换，请重新选择主题');
+    return;
+  }
+  if (organizeChannel('deleted', deleteTarget.name)) {
+    $('#delete-channel-dialog').close();
+    $('#overview-button').focus();
+  }
+};
+$('#delete-channel-dialog').addEventListener('close', () => {
+  deleteTarget = null;
+  if (state.view === 'channel') $('#theme-management > summary').focus();
+});
+
 $('#rename-channel').onclick = () => {
   const channel = currentChannel();
   if (!channel) return;
@@ -1534,9 +1633,11 @@ $('#rename-form').onkeydown = (event) => {
   if (event.key === 'Escape') { event.stopPropagation(); $('#rename-cancel').click(); }
 };
 window.addEventListener('storage', (event) => {
-  if (event.key !== aliasStorageKey() && event.key !== null) return;
+  if (![aliasStorageKey(), organizationStorageKey(), null].includes(event.key)) return;
   readChannelAliases();
+  readChannelOrganization();
   state.channels = applyChannelAliases(state.channels);
+  if (!currentChannel()) { state.channel = null; state.view = 'global'; }
   renderAll();
   if ($('#message-dialog').open) renderDialog();
 });

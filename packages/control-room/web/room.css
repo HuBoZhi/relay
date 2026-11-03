@@ -582,3 +582,21 @@ button:active { transform: scale(.98); }
 .channel-extra-body .channel-task { margin: 0; padding: 0; border: 0; gap: 8px; }
 .channel-extra-body .state-evidence { margin-top: 7px; font-size: 10px; line-height: 1.4; color: #8b9eaa; }
 @media(max-width:620px) { .channel-summary { padding-inline: 14px; gap: 9px; } }
+
+/* Local-only theme organization; keep controls out of the chat status strip. */
+.channel-filters { flex-wrap: wrap; }
+.overview-heading h1 { flex-wrap: wrap; }
+.theme-management { position: relative; font-size: 11px; letter-spacing: 0; font-weight: 400; flex-shrink: 0; }
+.theme-management > summary { list-style: none; cursor: pointer; }
+.theme-management > summary::-webkit-details-marker { display: none; }
+.theme-management-menu { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; width: 210px; padding: 6px; border: 1px solid #45636c; border-radius: 6px; background: #15262e; box-shadow: 0 8px 24px #0006; }
+.theme-management-menu button { display: block; width: 100%; padding: 10px; text-align: left; border-radius: 4px; }
+.theme-management-menu button:hover { background: #243d46; }
+.theme-management-menu small { display: block; padding: 8px 10px; color: #8ba5ae; line-height: 1.6; }
+.danger-action { color: #efb1a3; }
+.theme-delete-dialog { width: min(440px, calc(100vw - 32px)); color: #dcebed; background: #12212a; border: 1px solid #45636c; border-radius: 8px; padding: 24px; }
+.theme-delete-dialog::backdrop { background: #02080ccc; }
+.theme-delete-dialog h2 { font-size: 18px; }
+.theme-delete-dialog p { margin-block: 16px 24px; color: #abc0c9; line-height: 1.8; overflow-wrap: anywhere; }
+.theme-delete-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+@media(max-width:620px) { .theme-management-menu { position: fixed; left: 16px; right: 16px; top: auto; width: auto; margin-top: 6px; } }
