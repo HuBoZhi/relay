@@ -18,7 +18,7 @@
 - `Start-RelaySystem.ps1` 仍由既有 HKCU Run `RelayControlRoom` 登录入口执行，现改为对三个客户端调用恢复脚本。无需 Codex 定时会话，不新增重复启动项。这是每次登录检查，不是跨日或全天轮询。
 - `Invoke-RelayAgent.ps1` 和 `Invoke-DesktopTask.ps1` 在提交 Node 任务前执行恢复检查；前者使用 .NET UTF8Encoding 写入无 BOM JSON，兼容 Windows PowerShell 5.1。
 - 已更新共享正文 `D:\codex\skills\relay-agent-connect\SKILL.md`，明确用户的自动重启授权、登录和委派前的恢复、当前调用宿主保护、最多一次恢复及提交后不自动重发任务。旧正文在同一安装备份目录保留。
-- “调用方”暂按接收任务的目标客户端处理；已向用户询问是否还包括发出任务的程序。未扩大到自动关闭当前发出任务的宿主。
+- 用户随后明确确认：“调用方”指接收任务的目标客户端（ZCode、WorkBuddy、Factory）。自动重启范围不包括发出任务的程序；现有实现与该确认一致。
 - 端口被其他应用占用、内部模块不兼容、模型或登录错误均不会触发盲目重启循环。此版本没有修复 ZCode 的 `service module scopes unavailable`，不声称已完成端到端模型调用验收。
 
 ## 验证与安装
