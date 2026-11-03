@@ -844,6 +844,7 @@ reduced.addEventListener('change', syncMotion);
 function renderSummary() {
   const channel = currentChannel();
   const container = $('#channel-summary');
+  const detailsOpen = $('.channel-extra', container)?.open === true;
   if (!channel) {
     container.innerHTML =
       '<div class="loading-state"><strong>尚无频道</strong>该工作空间没有可见频道，或当前凭据无权查看。</div>';
@@ -866,11 +867,11 @@ function renderSummary() {
     .map((agent) => `<span class="avatar">${esc(initials(agent))}</span>`)
     .join('')}</div><span>${channel.memberCount} 个智能体</span><small>${
     channel.runningCount
-  } 个执行中</small></div><div class="channel-task ${cls}">${icon(
+  } 个执行中</small></div><details class="channel-extra"${detailsOpen ? ' open' : ''}><summary>状态详情</summary><div class="channel-extra-body"><div class="channel-task ${cls}">${icon(
     badgeIcon
   )}<span>${esc(channel.stateReason)}</span></div><p class="state-evidence">依据：${esc(
     evidenceLabel(channel.evidence)
-  )}${channel.archived ? ' · 频道已归档，历史可查' : ''}</p></div>`;
+  )}${channel.archived ? ' · 频道已归档，历史可查' : ''}</p></div></details></div>`;
   $('#agent-count').textContent = String(channel.memberCount);
   renderPage();
   paintIcons(container);

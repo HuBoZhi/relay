@@ -515,7 +515,7 @@
 /* Page scope is controlled by navigation; hidden content never occupies space. */
 [hidden] { display: none !important; }
 body[data-page='overview'] .workbench { grid-template-columns: minmax(0, 1fr); }
-body[data-page='channel'] .workbench { grid-template-columns: minmax(0, 1fr) clamp(360px, 28vw, 460px); }
+body[data-page='channel'] .workbench { grid-template-columns: minmax(0, 1fr) minmax(390px, 39%); }
 .nav-overview { background: transparent; border-color: transparent; }
 .nav-overview.active { background: #1d3038; border-color: #36555d; color: #d3fff6; }
 .overview-heading h1 { min-width: 0; }
@@ -566,10 +566,19 @@ button:active { transform: scale(.98); }
 .rename-form small { width: 100%; color: #8ea5af; font-size: 11px; }
 @media(max-width:620px) { .overview-heading h1 { flex-wrap: wrap; } .rename-form input { width: 100%; } }
 
-/* Keep channel context compact; its title and description are already above. */
-.channel-summary { padding: 14px 20px; }
+/* A single status row leaves the inspector's height to message history. */
+.channel-summary { padding: 7px 20px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; }
 .channel-summary .channel-title,
 .channel-summary > p:not(.state-evidence) { display: none; }
-.channel-summary .channel-people { margin-top: 10px; gap: 9px; }
-.channel-summary .channel-task { margin-top: 10px; padding-top: 9px; gap: 8px; }
-.channel-summary .state-evidence { margin-top: 5px; font-size: 10px; line-height: 1.4; }
+.channel-summary .channel-eyebrow { margin: 0; }
+.channel-summary .channel-eyebrow > .eyebrow { display: none; }
+.channel-summary .channel-people { margin: 0; gap: 8px; max-width: none; }
+.channel-summary .avatar-stack { display: none; }
+.channel-summary .channel-people > small { margin-left: 0; }
+.channel-extra { position: relative; font-size: 11px; color: #a7c5cd; }
+.channel-extra > summary { cursor: pointer; padding: 6px 0; white-space: nowrap; }
+.channel-extra > summary:focus-visible { outline: 2px solid #78dcd0; outline-offset: 3px; }
+.channel-extra-body { position: absolute; right: 0; top: 100%; z-index: 5; width: min(320px, calc(100vw - 48px)); padding: 14px; background: #15262e; border: 1px solid #45636c; border-radius: 6px; box-shadow: 0 8px 24px #0006; }
+.channel-extra-body .channel-task { margin: 0; padding: 0; border: 0; gap: 8px; }
+.channel-extra-body .state-evidence { margin-top: 7px; font-size: 10px; line-height: 1.4; color: #8b9eaa; }
+@media(max-width:620px) { .channel-summary { padding-inline: 14px; gap: 9px; } }
