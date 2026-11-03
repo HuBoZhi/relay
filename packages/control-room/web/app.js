@@ -853,8 +853,67 @@ function updateGraphScale() {
   )}<br><span>${state.view === 'channel' ? '频道参与关系' : '逻辑协作网络'}</span>`;
 }
 
+// Keep compact captions readable without flattening larger headings. CSSOM also
+// exposes font sizes declared through the font shorthand and inside media rules.
+function applyMinimumTextSize() {
+  function visit(rules) {
+    for (const rule of rules) {
+      if (rule.cssRules) visit(rule.cssRules);
+      const shorthand = rule.style?.getPropertyValue('font');
+      const size = rule.style?.fontSize || shorthand?.match(/(?:^|\s)(\d*\.?\d+px)(?=[/\s])/)?.[1];
+      if (size && /^\d*\.?\d+px$/.test(size)) {
+        rule.style.setProperty('font-size', `${Math.max(13, parseFloat(size))}px`, rule.style.getPropertyPriority('font-size') || rule.style.getPropertyPriority('font'));
+      }
+    }
+  }
+  for (const sheet of document.styleSheets) {
+    try { visit(sheet.cssRules); } catch { /* External stylesheets may deny CSSOM access. */ }
+  }
+  const floor = document.createElement('style');
+  floor.textContent = 'small, time { font-size: 13px !important; }';
+  document.head.append(floor);
+}
+
+function graphScale() {
+  const svg = $('#network');
+  const matrix = svg.getScreenCTM?.();
+  if (matrix) return Math.hypot(matrix.a, matrix.b) || 1;
+  const rect = svg.getBoundingClientRect();
+  return Math.min(rect.width / 900, rect.height / (state.view === 'global' ? 440 : 620)) || 1;
+}
+
+function zoomBounds() {
+  // SVG viewBox fitting must not shrink the 13px type below 13 screen pixels.
+  const min = Math.max(0.7, 1 / graphScale());
+  return { min, max: Math.max(4, min * 4) };
+}
+
+function changeZoom(next, anchor = null) {
+  const bounds = zoomBounds();
+  const zoom = Math.max(bounds.min, Math.min(bounds.max, next));
+  if (anchor) {
+    const svg = $('#network');
+    const point = svg.createSVGPoint();
+    point.x = anchor.clientX;
+    point.y = anchor.clientY;
+    const position = point.matrixTransform(svg.getScreenCTM().inverse());
+    const ratio = zoom / state.zoom;
+    const cy = state.view === 'global' ? 220 : 300;
+    state.panX = (position.x - 450) * (1 - ratio) + state.panX * ratio;
+    state.panY = (position.y - cy) * (1 - ratio) + state.panY * ratio;
+  }
+  state.zoom = zoom;
+  updateZoom();
+}
+
 function updateZoom() {
-  const cy = state.view === 'global' ? 220 : 310;
+  for (const text of $$('#network text[font-size]')) {
+    const size = Number(text.getAttribute('font-size'));
+    if (size > 0 && size < 13) text.setAttribute('font-size', '13');
+  }
+  const bounds = zoomBounds();
+  state.zoom = Math.max(bounds.min, Math.min(bounds.max, state.zoom));
+  const cy = state.view === 'global' ? 220 : 300;
   const camera = $('#graph-camera');
   if (camera) {
     camera.setAttribute(
@@ -863,8 +922,8 @@ function updateZoom() {
     );
   }
   $('#zoom-value').textContent = `${Math.round(state.zoom * 100)}%`;
-  $('#zoom-out').disabled = state.zoom <= 0.7;
-  $('#zoom-in').disabled = state.zoom >= 1.8;
+  $('#zoom-out').disabled = state.zoom <= bounds.min + 0.001;
+  $('#zoom-in').disabled = state.zoom >= bounds.max - 0.001;
 }
 
 function setView(view) {
@@ -1773,12 +1832,10 @@ $('#notice-dismiss').onclick = () => {
   renderConnection();
 };
 $('#zoom-in').onclick = () => {
-  state.zoom = Math.min(1.8, Math.round((state.zoom + 0.1) * 10) / 10);
-  updateZoom();
+  changeZoom(state.zoom * 1.15);
 };
 $('#zoom-out').onclick = () => {
-  state.zoom = Math.max(0.7, Math.round((state.zoom - 0.1) * 10) / 10);
-  updateZoom();
+  changeZoom(state.zoom / 1.15);
 };
 $('#zoom-reset').onclick = () => {
   state.zoom = 1;
@@ -1794,6 +1851,16 @@ $('#fullscreen-button').onclick = async () => {
     toast('当前浏览器不支持全屏，可使用拓扑缩放');
   }
 };
+
+$('#graph-stage').addEventListener('wheel', (event) => {
+  if (event.ctrlKey || event.metaKey || !event.deltaY) return;
+  event.preventDefault();
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? $('#graph-stage').clientHeight : 1;
+  const delta = Math.max(-400, Math.min(400, event.deltaY * unit));
+  changeZoom(state.zoom * Math.exp(-delta * 0.002), event);
+}, { passive: false });
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => updateZoom()).observe($('#network'));
+window.addEventListener('resize', updateZoom);
 
 let drag = null;
 $('#graph-stage').onpointerdown = (event) => {
@@ -1968,6 +2035,7 @@ async function mountDesktopMenu() {
 
 /* -------------------------------------------------------------------- init */
 
+applyMinimumTextSize();
 renderLiveToggle();
 tickClock();
 void mountDesktopMenu();

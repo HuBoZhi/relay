@@ -15,7 +15,7 @@ test('channel graph keeps visible text separate at desktop and mobile sizes', { 
   await access(executablePath);
   const scratch = await mkdtemp(join(tmpdir(), 'relay-labels-'));
   const source = new DemoControlRoomSource({ timezone: 'Asia/Shanghai' });
-  const server = await startControlRoom({ source, port: 0, webRoot: fileURLToPath(new URL('../web/', import.meta.url)), log: () => {} });
+  const server = await startControlRoom({ source, port: 0, webRoot: process.env.RELAY_LAYOUT_WEB_ROOT || fileURLToPath(new URL('../web/', import.meta.url)), log: () => {} });
   let context;
   try {
     context = await chromium.launchPersistentContext(join(scratch, 'profile'), {
@@ -39,6 +39,38 @@ test('channel graph keeps visible text separate at desktop and mobile sizes', { 
         await page.locator('#channel-list button').first().click();
         await page.locator('#network .agent-node').first().waitFor();
         await page.evaluate(() => document.fonts.ready);
+        if (count === 4 && width === 1680) {
+          const before = Number((await page.locator('#zoom-value').textContent()).replace('%', ''));
+          const stage = await page.locator('#graph-stage').boundingBox();
+          await page.mouse.move(stage.x + stage.width / 2, stage.y + stage.height / 2);
+          await page.mouse.wheel(0, -150);
+          await page.waitForTimeout(100);
+          const enlarged = Number((await page.locator('#zoom-value').textContent()).replace('%', ''));
+          assert.ok(enlarged > before, 'Wheel up must zoom in');
+          await page.mouse.wheel(0, 150);
+          await page.waitForTimeout(100);
+          assert.ok(Number((await page.locator('#zoom-value').textContent()).replace('%', '')) < enlarged, 'Wheel down must zoom out');
+          for (let step = 0; step < 3; step++) await page.mouse.wheel(0, 400);
+          await page.waitForTimeout(100);
+          assert.ok(await page.locator('#zoom-out').isDisabled(), 'Zoom out must stop at the readable text limit');
+          await page.locator('#zoom-reset').click();
+        }
+        const smallText = await page.evaluate(() => {
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          const small = [];
+          while (walker.nextNode()) {
+            const node = walker.currentNode, el = node.parentElement;
+            if (!node.textContent.trim() || !el || ['SCRIPT', 'STYLE', 'TITLE'].includes(el.tagName.toUpperCase())) continue;
+            const box = el.getBoundingClientRect();
+            if (!box.width || !box.height || getComputedStyle(el).visibility === 'hidden') continue;
+            const matrix = el instanceof SVGGraphicsElement ? el.getScreenCTM() : null;
+            const scale = matrix ? Math.hypot(matrix.a, matrix.b) : 1;
+            const size = parseFloat(getComputedStyle(el).fontSize) * scale;
+            if (size < 12.95) small.push({ text: node.textContent.trim().slice(0, 25), size, tag: el.tagName, cls: el.getAttribute('class') });
+          }
+          return small;
+        });
+        assert.deepEqual(smallText, [], `${count} nodes at ${width}px must show text at 13px or larger`);
         const collisions = await page.evaluate(() => {
           const texts = [...document.querySelectorAll('#network text')].map(el => ({ text: el.textContent, box: el.getBoundingClientRect() })).filter(t => t.box.width > 0 && t.box.height > 0);
           const collisions = [];
@@ -53,6 +85,16 @@ test('channel graph keeps visible text separate at desktop and mobile sizes', { 
         if (process.env.RELAY_LAYOUT_OUTPUT_DIR && count === 4 && width === 1680) {
           await page.screenshot({ path: join(process.env.RELAY_LAYOUT_OUTPUT_DIR, 'channel-fixed.png'), fullPage: true });
           await page.locator('#network-panel').screenshot({ path: join(process.env.RELAY_LAYOUT_OUTPUT_DIR, 'network-fixed.png') });
+        }
+        if (count === 4 && width === 1680) {
+          await page.locator('#overview-button').click();
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const overviewSmall = await page.locator('#network text').evaluateAll(texts => texts.filter(el => {
+            const matrix = el.getScreenCTM(), box = el.getBoundingClientRect();
+            return box.width && box.height && parseFloat(getComputedStyle(el).fontSize) * Math.hypot(matrix.a, matrix.b) < 12.95;
+          }).map(el => el.textContent));
+          assert.deepEqual(overviewSmall, [], 'Overview graph text must also stay at least 13px');
+          if (process.env.RELAY_LAYOUT_OUTPUT_DIR) await page.screenshot({ path: join(process.env.RELAY_LAYOUT_OUTPUT_DIR, 'overview-fixed.png'), fullPage: true });
         }
         await page.close();
       }
