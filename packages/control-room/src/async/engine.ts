@@ -79,6 +79,8 @@ export interface EngineEvent {
   stageId?: string;
   callbackId?: string;
   message: string;
+  /** Set on group events so the shell can deep-link the conversation. */
+  groupId?: string;
   /** Set on callback events so the shell can pick a notification title. */
   outcome?: 'completed' | 'failed' | 'blocked';
   /** Delivery layer at the time of the event, for the same reason. */
@@ -713,7 +715,7 @@ export class AsyncEngine {
 
     const view = await this.group(groupId);
     if (!view) throw new AsyncNotFoundError('群创建失败');
-    this.emit({ type: 'group.created', at: this.stamp(), message: `群已创建：${view.group.name}` });
+    this.emit({ type: 'group.created', at: this.stamp(), groupId: view.group.id, message: `群已创建：${view.group.name}` });
     return view;
   }
 
@@ -951,7 +953,7 @@ export class AsyncEngine {
     const view = await this.group(groupId);
     const member = view?.members.find((item) => item.id === memberId);
     if (!view || !member) throw new AsyncNotFoundError('加入失败');
-    this.emit({ type: 'group.joined', at, message: `${member.displayName} 已加入` });
+    this.emit({ type: 'group.joined', at, groupId, message: `${member.displayName} 已加入` });
     return { member, group: view };
   }
 

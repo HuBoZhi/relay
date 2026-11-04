@@ -149,6 +149,7 @@ describe('buildTrayMenu', () => {
 
   it('offers task workspace and settings without Latin labels', () => {
     const labels = build().map((item) => item.label ?? '');
+    expect(labels).toContain('打开群聊');
     expect(labels).toContain('打开任务工作台');
     expect(labels).toContain('设置数据目录与启动行为');
     expect(labels).toContain('缩小到托盘');
@@ -239,8 +240,9 @@ describe('buildAppMenu', () => {
     for (const id of menuActionIds(menu)) expect(MENU_ACTIONS, id).toContain(id);
   });
 
-  it('exposes the task workspace and settings entries', () => {
+  it('exposes the chat, task workspace, and settings entries', () => {
     const ids = menuActionIds(menu);
+    expect(ids).toContain('open-chat');
     expect(ids).toContain('open-tasks');
     expect(ids).toContain('open-settings');
     expect(ids).toContain('open-observer');

@@ -98,13 +98,3 @@ export function mergeSettings(current, patch) {
   }
   return next;
 }
-
-/**
- * Which page a notification should open.
- *
- * A task event deep-links to that task; everything else opens the task workspace,
- * because a notification that lands on the observer graph has not helped anyone.
- */
-export function taskUrlFor(baseUrl, taskId) {
-  return taskId ? `${baseUrl}/tasks.html#task=${encodeURIComponent(taskId)}` : `${baseUrl}/tasks.html`;
-}

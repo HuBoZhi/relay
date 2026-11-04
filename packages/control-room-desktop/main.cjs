@@ -193,7 +193,9 @@ async function createWindow() {
     }
   });
 
-  await win.loadURL(room.url);
+  // The app opens on the group chat: a topic you can talk in is the point of the
+  // product, and the observer is one click away from the menu.
+  await win.loadURL(`${room.url}/chat.html`);
 
   if (config.smoke) {
     // A smoke run must always end: `--capture` in a degraded live session has been
@@ -250,6 +252,7 @@ function updateTray() {
     tasks: taskCounts,
     actions: {
       openWindow: showWindow,
+      openChat: () => void navigate('/chat.html'),
       openTasks: () => void navigate('/tasks.html'),
       openSettings: () => void navigate('/tasks.html#settings'),
       copyUrl: () => {
@@ -326,7 +329,10 @@ function notifyFromEvent(event) {
   if (!Notification.isSupported()) return;
   const titles = { completed: '阶段完成', failed: '阶段失败', blocked: '阶段阻塞' };
   let title = null;
-  if (event.type === 'callback.received' && event.outcome) {
+  if (event.type === 'group.result' && event.outcome) {
+    // The result shows up in the group first; the notification only says so.
+    title = titles[event.outcome] ?? '收到结果';
+  } else if (event.type === 'callback.received' && event.outcome) {
     title = titles[event.outcome] ?? '收到回传';
   } else if (event.type === 'callback.received' && event.message === '重复回传已忽略') {
     return;
@@ -342,6 +348,10 @@ function notifyFromEvent(event) {
   note.on('click', () => {
     // Land on the task, not on the graph: a notification that opens the overview
     // has told the user nothing they can act on.
+    if (event.groupId) {
+      void navigate(`/chat.html#group=${encodeURIComponent(event.groupId)}`);
+      return;
+    }
     void navigate(event.taskId ? `/tasks.html#task=${encodeURIComponent(event.taskId)}` : '/tasks.html');
   });
   note.show();
@@ -391,6 +401,7 @@ function zoomBy(delta) {
 
 /** The menu lives in the page, so the shell only exposes named actions. */
 const MENU_HANDLERS = {
+  'open-chat': () => void navigate('/chat.html'),
   'open-tasks': () => void navigate('/tasks.html'),
   'open-observer': () => void navigate('/'),
   'open-settings': () => void navigate('/tasks.html#settings'),

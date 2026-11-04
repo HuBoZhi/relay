@@ -1,8 +1,9 @@
 # 协作控制中心 · 桌面托盘版（`@agent-relay/control-room-desktop`）
 
-把 [`@agent-relay/control-room`](../control-room) 的观察界面与任务工作台装进一个桌面外壳，
+把 [`@agent-relay/control-room`](../control-room) 的群聊、任务工作台与观察界面装进一个桌面外壳，
 并让外壳自己承载异步任务引擎（消息受理、派发队列、回传路由）。
 
+- 双击打开就是群聊：一个主题一个群，在群里 @ 某个 Agent 并指定模型、思考强度与项目即派活。
 - 界面与 `relay-control-room` 完全同源：服务端是控制中心打包产物，前端是 `packages/control-room/web`。
 - 关闭窗口默认**退出应用**：订阅、端口、引擎一起停止；「缩小到托盘」需要显式操作或在设置里开启。
 - 托盘图标提供：打开界面、打开任务工作台、设置、复制访问地址、在浏览器中打开、查看运行状态

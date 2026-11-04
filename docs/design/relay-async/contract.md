@@ -15,6 +15,9 @@
 | 对象 | 字段 | 说明 |
 | --- | --- | --- |
 | 主题 Topic | `id` `name` `slug` `channel` `createdAt` | `name` 是用户输入（可含中文、日期），`slug` 是 ASCII 映射；同一 `name` 复用同一主题 |
+| 群 Group | `id` `topicId` `name` `slug` `createdBy` `memberIds` `messageIds` `taskIds` | 一个主题一个群；群不承载执行配置，只承载对话与成员 |
+| 成员 GroupMember | `id` `agentId` `role` `sessionId` `app` `device` `chatId` `model` `joinedBy` | `sessionId` 是「已真正进入这个群」的证据，`null` 表示尚未登记 |
+| 群消息 GroupMessage | `id` `kind` `sender` `body` `mentions` `taskId` `stageId` `runId` `outcome` `state` `reason` | `kind`：`text` `request` `result` `join` `system`；`state` 只描述投递 |
 | 任务 Task | `id` `topicId` `title` `body` `authorization` `origin` `correlationId` `stageIds` `runIds` `callbackIds` `messageIds` `status` `cancelled` | `origin` 是回传目标聊天的绑定 |
 | 阶段 Stage | `id` `taskId` `index` `kind` `label` `dependsOn` `client` `project` `session` `model` `completion` `callback` `queueIfUnavailable` `runIds` `status` | `project` = `{ id, path }`；`model` = `{ account, provider, modelId, reasoning }` |
 | 执行实例 Run | `id` `attempt` `requestedModel` `actual` `status` `queuedReason` `lastError` `messageId` | `actual` 由桥接回报，未回报时为 `null` |
@@ -48,6 +51,10 @@
 - 回传投递失败或没有可用通道 → `manual`，界面显示「需人工处理」。
 
 ## 4. 接口
+
+界面以「群聊」为入口：**一个群就是一个主题**，在群里 `@` 某个 Agent 并指定模型、思考强度与项目，
+就是一次派活；对方完成后在同一个群里 `@` 回发起方，回传沿同一条链路进入原聊天。
+任务接口（4.1–4.3）是这条链路的底座，群接口（4.4）是它的对话外壳。
 
 所有接口在 APP 自己的回环端口上，与观察台同源。`POST` 必须是 `application/json`，
 带 `Origin` 时必须与请求 Host 同源。
@@ -156,6 +163,52 @@ POST /api/async/callbacks
 | `POST /api/async/runs/:id/state` | 桥接回报原生轮次状态：`{ execution, detail }` |
 | `GET /api/async/clients` | 客户端能力矩阵 |
 | `POST /api/async/clients/:id/probe` | 单次显式探测，不进入定时轮询 |
+
+### 4.4 群聊
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/groups` | 群列表（最后一条消息、成员数、在途请求数） |
+| `POST /api/groups` | 建群：`{ name, creator }`；同名主题复用同一群 |
+| `GET /api/groups/:id` | 群详情：`{ group, members, messages, tasks }` |
+| `POST /api/groups/:id/messages` | 发言；带完整 `@` 时派活 |
+| `POST /api/groups/:id/join` | Agent 登记自己的会话（入群） |
+| `POST /api/groups/:id/results` | 回报结果：写入群消息 + 走回传路由 |
+
+发言请求：
+
+```json
+{
+  "sender": { "agentId": "codex", "displayName": "Codex", "app": "codex", "device": "desktop-01", "chatId": "chat_original_7" },
+  "body": "把登录页的空状态补上",
+  "mentions": [
+    {
+      "target": "zcode",
+      "client": "zcode",
+      "model": { "account": "BigModel", "provider": "zhipu", "modelId": "GLM-5.3-Flash", "reasoning": "max" },
+      "project": { "id": "proj_mediadock", "path": "D:////Work////MediaDock" }
+    }
+  ]
+}
+```
+
+判定规则：
+
+- 提及同时带 `client`、`model`、`project` → 派活：创建任务（`groupId` 记在任务上）并派发一次。
+- 提及只带 `target` → 普通消息：只寻址，不派发、不建会话。
+- 带 `client` 但缺 `project` → `400`，错误字段为 `mentions[i].project`；不允许客户端自行选目录。
+- 派活未接入桥接时消息状态为 `queued` 并给出原因；`delivered` 只表示目标已受理提示词。
+
+入群：目标客户端在受理后把 `sessionId` 报给 `POST /join`（或由派发回执里的 `sessionId` 自动登记），
+成员行保留该会话 ID，群里出现一条「已加入（会话 …）」的系统消息。
+
+回报：`{ sender, taskId, outcome, summary, evidence? }`。
+`stageId` 缺省取该任务最后一个阶段；`runId` 由服务端解析。
+结果消息的 `state` 来自回传投递：`delivered`（已进入原聊天）/`queued`（已入队）/`manual`（需人工处理）。
+缺少 `mentions` 时默认 `@` 回任务发起方。
+
+群事件（SSE `async` 帧）：`group.created`、`group.joined`、`group.message`、`group.result`，
+携带 `groupId`；界面据此刷新会话，不轮询。
 
 ## 5. 路由与阶段链
 

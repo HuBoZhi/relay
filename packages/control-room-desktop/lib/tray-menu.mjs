@@ -94,6 +94,7 @@ export function buildTrayMenu({
 
   return [
     { label: '打开控制中心', click: actions.openWindow },
+    { label: '打开群聊', click: actions.openChat },
     { label: '打开任务工作台', click: actions.openTasks },
     { label: '设置数据目录与启动行为', click: actions.openSettings },
     { label: '复制访问地址', enabled: Boolean(url), click: actions.copyUrl },

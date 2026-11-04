@@ -12,6 +12,7 @@
 
 /** Actions the shell knows how to perform; anything else is rejected. */
 export const MENU_ACTIONS = [
+  'open-chat',
   'open-tasks',
   'open-observer',
   'open-settings',
@@ -42,6 +43,7 @@ export function buildAppMenu({ isPackaged = true } = {}) {
     {
       label: '控制中心',
       items: [
+        { id: 'open-chat', label: '群聊' },
         { id: 'open-tasks', label: '任务工作台' },
         { id: 'open-observer', label: '观察台' },
         { id: 'open-settings', label: '设置' },

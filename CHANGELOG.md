@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/control-room`: group chat over topics. A group is a topic you can talk in; an `@` that names a client, a model, a reasoning level, and a project becomes a dispatched request, the receiving agent joins by reporting its session id, and its result is posted back into the same conversation and routed to the chat that asked. A plain `@` only addresses, and a request without a project is refused on that mention. `GET/POST /api/groups`, `POST /api/groups/:id/{messages,join,results}`.
+
 - `@agent-relay/control-room`: async task engine behind `--tasks`. `POST /api/async/tasks` persists a task and returns a receipt (`queued` vs `delivered`) without waiting for a model, `POST /api/async/callbacks` records a completion, failure, or block and routes it back to the originating chat, and an authorised stage chain starts the review only after a completed callback. Transport, execution, business, and callback status are separate layers, callback replays collapse into one effective handling, and state plus an audit journal survive a restart.
 
 - `@agent-relay/control-room`: task workspace page next to the observer. Overview counts in-flight stages, pending confirmations, undelivered and manual callbacks; the dispatch form asks for topic, project, session policy, account, model, and reasoning per stage; task detail shows the real session, project, and model reported back, the callback delivery state, and a sourced timeline; the client matrix keeps unverified capabilities visible.
@@ -28,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Work state is derived from reduced agent session events, so an agent with no task event reports `未知` instead of `空闲`, and a channel with only recent messages reports `近期有消息` instead of `工作中`.
 
 ### Changed
+
+- `@agent-relay/control-room-desktop`: the window opens on the group chat instead of the observer graph, and the menu and tray gained a 群聊 entry; group results raise a notification that deep-links to the conversation.
 
 - `@agent-relay/control-room-desktop`: closing the window now quits the app and stops its engine, subscription, and port; "close to tray" is an explicit setting, and the tray gained "缩小到托盘" and task-workspace entries.
 

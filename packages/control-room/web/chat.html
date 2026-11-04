@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070b12" />
+    <meta name="description" content="Relay 群聊 — 在同一个主题里 @ 不同 Agent 派活，并接收它们的回传。" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./chat.css" />
+    <title>群聊 · Relay</title>
+  </head>
+  <body>
+    <header class="chat-topbar">
+      <div class="chat-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" fill="none">
+            <path d="M20 3 34 11v18l-14 8L6 29V11L20 3Z" />
+            <path d="m20 10 8 5v10l-8 5-8-5V15l8-5Z" />
+            <circle cx="20" cy="20" r="2.5" />
+            <path d="M20 3v7m14 1-6 4m6 14-6-4M20 37v-7M6 29l6-4M6 11l6 4" />
+          </svg>
+        </span>
+        <span>Relay 群聊<small>主题即群 · @ 派活 · 回传进原聊天</small></span>
+      </div>
+      <div class="chat-me">
+        <label for="me-select">我是</label>
+        <select id="me-select" aria-label="当前身份"></select>
+        <span class="mono" id="me-chat"></span>
+      </div>
+      <div class="chat-actions">
+        <span class="chip" id="engine-chip" data-state="unknown">
+          <span data-icon="activity"></span><span id="engine-chip-text">正在连接…</span>
+        </span>
+        <button class="menu-trigger" id="menu-button" type="button" hidden>菜单</button>
+        <a class="icon-button" href="./tasks.html" title="任务详情">
+          <span data-icon="layers"></span>
+        </a>
+        <a class="icon-button" href="./" title="观察台"><span data-icon="orbit"></span></a>
+        <button class="icon-button" id="refresh-button" type="button" title="刷新">
+          <span data-icon="scan"></span>
+        </button>
+      </div>
+    </header>
+
+    <div class="chat-shell">
+      <aside class="conversations" aria-label="群列表">
+        <button class="new-group" id="new-group-button" type="button">
+          <span data-icon="plus"></span>新建群（主题）
+        </button>
+        <div class="conv-label"><span>会话</span><span class="mono" id="conv-count">0</span></div>
+        <div id="conv-list" class="conv-list"></div>
+        <p class="conv-note">
+          建群即创建一个主题。在群里 @ 某个 Agent 并指定模型、思考强度与项目，就是派活；它完成后再 @ 回你。
+        </p>
+      </aside>
+
+      <main class="conversation" id="conversation" aria-live="polite">
+        <div class="conv-empty">
+          <strong>还没有打开任何群</strong>
+          <span>新建一个群，或者从左侧选择一个会话。</span>
+        </div>
+      </main>
+    </div>
+
+    <div class="menu-pop" id="menu-pop" hidden></div>
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <script src="./icons.js"></script>
+    <script src="./chat.js"></script>
+  </body>
+</html>

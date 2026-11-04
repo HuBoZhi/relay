@@ -17,6 +17,8 @@
 1. 任务引擎：契约、四层状态、持久化、幂等、回传路由、阶段链（`packages/control-room/src/async/`）。
 2. 本地接口：`/api/async/*` 挂在观察台同一端口，事件复用 SSE。
 3. 任务工作台：概览、派发表单、任务详情、回传处理、客户端矩阵、设置（`packages/control-room/web/tasks.*`）。
+3b. 群聊界面（`packages/control-room/web/chat.*`）：主题即群、`@` 派活（模型 / 思考强度 / 项目）、
+   成员会话登记、结果回报与投递状态；桌面 APP 默认打开这一页。
 4. 桌面 APP：主进程承载引擎与设置，默认关窗即退出，托盘显示任务计数，通知可跳转任务。
 5. 文档：`docs/design/relay-async/contract.md`。
 
@@ -37,6 +39,19 @@
 | AC-11 | 部分通过 | 重复事件幂等、重启恢复已通过自动化测试；断网重连与「投递后未确认」的真实宿主行为未验证 |
 | AC-12 | 通过 | 宿主无主动接收能力时显示「未接入 / 未验证 / 需人工处理」，不以通知或新 CLI 会话替代 |
 
+群聊链路的实测（本机，2026-11-04）：
+
+| 步骤 | 调用 | 结果 |
+| --- | --- | --- |
+| 建群 | `POST /api/groups`（名称 `20261104-MediaDock-需求开发2`） | `201`，`grp_730656c6…`，发起人为 owner |
+| @ 派活 | `POST /api/groups/:id/messages`，`@zcode` + `GLM-5.3-Flash` + `max` + `D://Work//MediaDock` | `202`，消息 `queued`，原因「未接入 zcode 的派发通道」 |
+| 入群 | `POST /api/groups/:id/join`，`sessionId=session_a1b2c3` | `200`，成员行记录会话，群内出现「已加入（会话 …）」 |
+| 回报 | `POST /api/groups/:id/results`，`completed` | `202`，结果消息 `manual`（`codex` 回传通道未接入），回传记录已写入 |
+| 会话顺序 | — | `system > request > join > result` |
+
+界面同一路径已由 Edge 走通：切换身份发消息、再以 Codex 派活，得到 4 条气泡、2 条系统提示，
+徽标为「已排队 / 完成 / 原聊天未收到，需人工处理」，无控制台错误。
+
 界面与数据验收：
 
 - 四层状态分别显示，均可追溯到事件时间与来源。
@@ -45,12 +60,13 @@
 - 任务正文、日志、接口响应不含模型密钥；数据目录可改为非系统盘。
 - 截图：`docs/design/relay-control-room/acceptance-2026-11-04/`
   - `tasks-overview.png`、`tasks-receipt-queued.png`、`tasks-callback-manual.png`、`tasks-client-matrix.png`
+  - `chat-group.png`（桌面窗口默认打开群聊）、`chat-dispatch-flow.png`（发消息 + 派活后的会话）
 
 ## 4. 自动化测试
 
 ```
 npx vitest run packages/control-room/ packages/control-room-desktop/
-→ 11 files, 137 tests passed
+→ 13 files, 151 tests passed
 ```
 
 新增测试分布：
@@ -58,11 +74,24 @@ npx vitest run packages/control-room/ packages/control-room-desktop/
 | 文件 | 数量 | 覆盖 |
 | --- | --- | --- |
 | `control-room/src/async/__tests__/engine.test.ts` | 17 | 回执边界、实际会话/模型、适配器异常、幂等提交、字段级校验、同主题多任务、阶段链只启动一次、重放折叠、失败不审查、越权回传拒绝、取消后晚到回传、manual 投递、注入能力只在真实投递后升级、重启恢复、审计日志、等待确认映射、slug |
-| `control-room/src/async/__tests__/http.test.ts` | 6 | 202 回执、重复提交同 ID、回传与投递分离、非 JSON/跨站拒绝、字段级错误、观察接口不受影响 |
+| `control-room/src/async/__tests__/http.test.ts` | 8 | 202 回执、重复提交同 ID、回传与投递分离、非 JSON/跨站拒绝、字段级错误、观察接口不受影响 |
+| `control-room/src/async/__tests__/groups.test.ts` | 9 | 同名复用同一群、`@` 派活携带模型/项目、缺项目被拒、普通消息不派发、结果回到原聊天、失败不启动后续、同群两请求互不串线、未受邀先发言自动入群、重启恢复 |
 | `control-room/src/__tests__/tasks-web.test.ts` | 3 | 列表与分层渲染、回执不夸大为已送达、字段错误就地显示 |
+| `control-room/src/__tests__/chat-web.test.ts` | 3 | 请求气泡显示目标/模型/项目与投递状态、缺项目不发请求、普通消息只寻址 |
 | `control-room-desktop/tests/desktop.test.ts` | +8（共 30） | 托盘任务行、新菜单项、设置默认值/回环桥接过滤/损坏文件降级/往返保存 |
 
 ## 5. 使用
+
+### 5.0 群聊（推荐入口）
+
+打开 `http://127.0.0.1:<端口>/chat.html`（桌面 APP 默认就是这一页）：
+
+1. 「新建群（主题）」→ 输入主题名，例如 `20261104-MediaDock-需求开发2`。
+2. 在底部选择 `@ZCode`、模型 `GLM-5.3-Flash`、思考强度 `max`、项目目录与项目 ID，写清要干的活，点「@ 派活」。
+3. 气泡按投递状态标注「已排队」或「已送达目标会话」；未接入桥接时显示原因。
+4. 接收方完成时调用 `POST /api/groups/:id/results`，群里出现结果气泡，并按回传状态显示
+   「回传已进入原聊天」或「原聊天未收到，需人工处理」。
+5. 「发送消息」只发消息：会 `@` 到某个 Agent，但不派发、不建会话。
 
 ### 5.1 桌面 APP
 
