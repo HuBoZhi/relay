@@ -715,7 +715,12 @@ export class AsyncEngine {
 
     const view = await this.group(groupId);
     if (!view) throw new AsyncNotFoundError('群创建失败');
-    this.emit({ type: 'group.created', at: this.stamp(), groupId: view.group.id, message: `群已创建：${view.group.name}` });
+    this.emit({
+      type: 'group.created',
+      at: this.stamp(),
+      groupId: view.group.id,
+      message: `群已创建：${view.group.name}`,
+    });
     return view;
   }
 
@@ -994,45 +999,24 @@ export class AsyncEngine {
       ...(input.limits ? { limits: input.limits } : {}),
     });
 
+    // The callback already wrote the result into the conversation (see
+    // deliverCallback); this only attributes it to the reporting agent and lets the
+    // caller choose who is addressed.
+    const messageId = callback.groupMessageId;
+    if (!messageId) throw new AsyncNotFoundError('结果未写入群消息');
     const sender = normalizeSender(input.sender);
-    const mentions =
-      input.mentions && input.mentions.length > 0
-        ? input.mentions.map(normalizeMention)
-        : [{ target: task.origin.senderId || task.origin.app }];
     const at = this.stamp();
-    const messageId = await this.store.mutate((state2) => {
+    await this.store.mutate((state2) => {
+      const message = state2.groupMessages[messageId];
       const currentGroup = state2.groups[groupId];
-      if (!currentGroup) throw new AsyncNotFoundError(`未找到群：${groupId}`);
-      const member = upsertMember(state2, groupId, {
-        agentId: sender.agentId,
-        displayName: sender.displayName,
-        app: sender.app,
-        device: sender.device,
-        chatId: sender.chatId,
-        sessionId: runIdSession(state2, runId),
-        model: stage.model,
-        role: 'worker',
-        joinedBy: 'self',
-        at,
-      });
-      if (!currentGroup.memberIds.includes(member.id)) currentGroup.memberIds.push(member.id);
-      const message = appendGroupMessage(state2, {
-        group: currentGroup,
-        kind: 'result',
-        sender,
-        body: input.summary,
-        mentions,
-        taskId: task.id,
-        stageId,
-        runId,
-        outcome: input.outcome,
-        state: groupStateFromDelivery(callback.delivery.state),
-        reason: callback.delivery.reason,
-        at,
-      });
+      if (!message || !currentGroup) throw new AsyncNotFoundError(`未找到群消息：${messageId}`);
+      if (sender.agentId) message.sender = sender;
+      if (input.mentions && input.mentions.length > 0) {
+        message.mentions = input.mentions.map(normalizeMention);
+      }
       currentGroup.updatedAt = at;
       return {
-        result: message.id,
+        result: null,
         events: [{ kind: 'group.result', message: input.summary.slice(0, 80), taskId: task.id }],
       };
     });
@@ -1429,8 +1413,52 @@ export class AsyncEngine {
         state.clientObservations[chat.app] ??= this.registry.capability(chat.app);
         noteChatInjection(state, chat.app, chat.chatId, at);
       }
+      // A grouped task speaks in its conversation: the result appears there even
+      // when it arrives through the bare callback API from a bridge.
+      let groupMessageId: string | null = null;
+      const group = currentTask.groupId ? state.groups[currentTask.groupId] : null;
+      if (group) {
+        const stage = state.stages[current.stageId];
+        const worker = stage?.client ?? chat.app;
+        const sender = {
+          agentId: worker,
+          displayName: agentDisplayName(worker),
+          app: worker,
+          device: 'local',
+          chatId: chat.chatId,
+        };
+        const member = upsertMember(state, group.id, {
+          agentId: sender.agentId,
+          displayName: sender.displayName,
+          app: sender.app,
+          device: sender.device,
+          chatId: sender.chatId,
+          sessionId: runIdSession(state, current.runId),
+          model: stage?.model ?? null,
+          role: 'worker',
+          joinedBy: 'self',
+          at,
+        });
+        if (!group.memberIds.includes(member.id)) group.memberIds.push(member.id);
+        const message = appendGroupMessage(state, {
+          group,
+          kind: 'result',
+          sender,
+          body: current.summary,
+          mentions: [{ target: currentTask.origin.senderId || currentTask.origin.app }],
+          taskId: currentTask.id,
+          stageId: current.stageId,
+          runId: current.runId,
+          outcome: current.outcome,
+          state: groupStateFromDelivery(current.delivery.state),
+          reason: current.delivery.reason,
+          at,
+        });
+        groupMessageId = message.id;
+        group.updatedAt = at;
+      }
       return {
-        result: toCallbackReceipt(current),
+        result: { ...toCallbackReceipt(current), groupMessageId },
         events: [
           {
             kind: current.delivery.state === 'manual' ? 'callback.manual' : 'callback.delivered',
@@ -1902,7 +1930,7 @@ function mapDeliverState(state: DeliverOutcome['state']): CallbackDeliveryState 
   }
 }
 
-function toCallbackReceipt(callback: CallbackRecord): CallbackReceipt {
+function toCallbackReceipt(callback: CallbackRecord, groupMessageId: string | null = null): CallbackReceipt {
   const status: LayerStatus = {
     transport: { state: 'target-received', at: callback.receivedAt, source: `callback:${callback.id}` },
     execution: { state: 'turn-ended', at: callback.receivedAt, source: `callback:${callback.id}` },
@@ -1921,6 +1949,7 @@ function toCallbackReceipt(callback: CallbackRecord): CallbackReceipt {
     recorded: !callback.duplicate,
     delivery: { ...callback.delivery },
     continuedStageId: callback.delivery.triggeredStageId,
+    groupMessageId,
     status,
   };
 }

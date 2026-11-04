@@ -478,6 +478,8 @@ export interface CallbackReceipt {
   delivery: CallbackRecord['delivery'];
   /** Stage that this callback started, when the chain is authorised. */
   continuedStageId: string | null;
+  /** Group message that carries this result, when the task belongs to a group. */
+  groupMessageId: string | null;
   status: LayerStatus;
 }
 

@@ -208,6 +208,38 @@ describe('group chat', () => {
     await engine.close();
   });
 
+  it('shows a result in the group even when a bridge posts the bare callback', async () => {
+    // This is how the dispatch bridge reports: it knows task/stage/run, not the
+    // conversation. The result must still appear where the work was asked for.
+    const adapter = new FakeZcode();
+    const engine = new AsyncEngine({
+      adapters: [adapter, new FakeZcode('codex')],
+      dataRoot: await scratchRoot(),
+    });
+    const { group } = await engine.createGroup({ name: '群R', creator: codex });
+    const request = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '补空状态',
+      mentions: [workMention()],
+    });
+
+    const receipt = await engine.recordCallback({
+      taskId: request.receipt?.taskId as string,
+      stageId: request.receipt?.stageId as string,
+      runId: request.receipt?.runId as string,
+      outcome: 'completed',
+      summary: '桥接回报：已完成',
+    });
+    expect(receipt.groupMessageId).toBeTruthy();
+
+    const view = await engine.group(group.id);
+    const results = view?.messages.filter((message) => message.kind === 'result') ?? [];
+    expect(results).toHaveLength(1);
+    expect(results[0]?.body).toBe('桥接回报：已完成');
+    expect(results[0]?.sender.agentId).toBe('zcode');
+    await engine.close();
+  });
+
   it('reports a failed request as failed and starts nothing', async () => {
     const adapter = new FakeZcode();
     const engine = new AsyncEngine({
