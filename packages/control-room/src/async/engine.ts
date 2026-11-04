@@ -20,6 +20,16 @@
 import type {
   AsyncSnapshot,
   BusinessState,
+  CallbackOutcome,
+  CreateGroupInput,
+  Group,
+  GroupMember,
+  GroupMention,
+  GroupMessage,
+  GroupView,
+  JoinGroupInput,
+  PostGroupMessageInput,
+  ReportGroupResultInput,
   CallbackDeliveryState,
   CallbackEvidence,
   CallbackReceipt,
@@ -59,7 +69,11 @@ export interface EngineEvent {
     | 'callback.received'
     | 'callback.delivered'
     | 'task.cancelled'
-    | 'client.updated';
+    | 'client.updated'
+    | 'group.created'
+    | 'group.joined'
+    | 'group.message'
+    | 'group.result';
   at: string;
   taskId?: string;
   stageId?: string;
@@ -69,6 +83,18 @@ export interface EngineEvent {
   outcome?: 'completed' | 'failed' | 'blocked';
   /** Delivery layer at the time of the event, for the same reason. */
   delivery?: string;
+}
+
+/** One row in the group rail: enough to render it without loading the group. */
+export interface GroupSummary {
+  id: string;
+  name: string;
+  slug: string;
+  memberCount: number;
+  messageCount: number;
+  lastMessage: { body: string; sender: string; at: string; kind: string } | null;
+  openRequests: number;
+  updatedAt: string;
 }
 
 export interface ValidationIssue {
@@ -311,6 +337,7 @@ export class AsyncEngine {
       const task: Task = {
         id: taskId,
         topicId: topic.id,
+        groupId: input.groupId?.trim() || null,
         title: input.title.trim(),
         body: input.body,
         authorization: {
@@ -617,6 +644,462 @@ export class AsyncEngine {
       return { result: null, events: [{ kind: 'stage.queued', message: reason, taskId, stageId, runId }] };
     });
     this.emit({ type: 'stage.queued', at, taskId, stageId, message: reason });
+  }
+
+  /* ------------------------------------------------------------------ groups */
+
+  /**
+   * Open a group for a topic.
+   *
+   * The name is the topic name the user typed; re-creating the same name returns
+   * the existing group, so two chats cannot split one topic into two rooms.
+   */
+  async createGroup(input: CreateGroupInput): Promise<GroupView> {
+    await this.open();
+    const name = input.name?.trim();
+    if (!name) throw new AsyncValidationError([{ field: 'name', message: '群名称不能为空' }]);
+    if (!input.creator?.agentId?.trim()) {
+      throw new AsyncValidationError([{ field: 'creator.agentId', message: '必须说明发起人' }]);
+    }
+
+    const groupId = await this.store.mutate((state) => {
+      const at = this.stamp();
+      const topic = resolveTopic(state, { name }, at);
+      const existing = Object.values(state.groups).find((group) => group.topicId === topic.id);
+      if (existing) return { result: existing.id, events: [] };
+
+      const group: Group = {
+        id: createId('group'),
+        topicId: topic.id,
+        name: topic.name,
+        slug: topic.slug,
+        createdBy: normalizeSender(input.creator),
+        memberIds: [],
+        messageIds: [],
+        taskIds: [],
+        createdAt: at,
+        updatedAt: at,
+      };
+      state.groups[group.id] = group;
+
+      const member = upsertMember(state, group.id, {
+        agentId: group.createdBy.agentId,
+        displayName: group.createdBy.displayName,
+        app: group.createdBy.app,
+        device: group.createdBy.device,
+        chatId: group.createdBy.chatId,
+        sessionId: null,
+        model: null,
+        role: 'owner',
+        joinedBy: 'creator',
+        at,
+      });
+      group.memberIds.push(member.id);
+      appendGroupMessage(state, {
+        group,
+        kind: 'system',
+        sender: group.createdBy,
+        body: `群已创建：${group.name}`,
+        mentions: [],
+        state: 'sent',
+        reason: null,
+        at,
+      });
+      return {
+        result: group.id,
+        events: [{ kind: 'group.created', message: group.name }],
+      };
+    });
+
+    const view = await this.group(groupId);
+    if (!view) throw new AsyncNotFoundError('群创建失败');
+    this.emit({ type: 'group.created', at: this.stamp(), message: `群已创建：${view.group.name}` });
+    return view;
+  }
+
+  /** Group list for the left rail, newest activity first. */
+  async listGroups(): Promise<GroupSummary[]> {
+    await this.open();
+    const state = this.store.snapshot;
+    return Object.values(state.groups)
+      .map((group) => {
+        const messages = group.messageIds
+          .map((id) => state.groupMessages[id])
+          .filter((message): message is GroupMessage => Boolean(message));
+        const last = messages.at(-1) ?? null;
+        const tasks = group.taskIds
+          .map((id) => state.tasks[id])
+          .filter((task): task is Task => Boolean(task));
+        return {
+          id: group.id,
+          name: group.name,
+          slug: group.slug,
+          memberCount: group.memberIds.length,
+          messageCount: messages.length,
+          lastMessage: last
+            ? { body: last.body, sender: last.sender.displayName, at: last.createdAt, kind: last.kind }
+            : null,
+          openRequests: tasks.filter(
+            (task) =>
+              !task.cancelled &&
+              ['queued', 'accepted', 'running', 'awaiting-confirmation'].includes(task.status.execution.state)
+          ).length,
+          updatedAt: group.updatedAt,
+        };
+      })
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async group(groupId: string): Promise<GroupView | null> {
+    await this.open();
+    const state = this.store.snapshot;
+    const group = state.groups[groupId];
+    if (!group) return null;
+    return {
+      group,
+      members: group.memberIds
+        .map((id) => state.groupMembers[id])
+        .filter((member): member is GroupMember => Boolean(member)),
+      messages: group.messageIds
+        .map((id) => state.groupMessages[id])
+        .filter((message): message is GroupMessage => Boolean(message))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      tasks: group.taskIds.map((id) => state.tasks[id]).filter((task): task is Task => Boolean(task)),
+    };
+  }
+
+  /**
+   * Post a message, and dispatch the work each `@` asks for.
+   *
+   * A mention that names a client, a model, and a project is a request: it becomes
+   * a task in this group and goes out through the adapter. A mention without them
+   * is only addressing, and the message stays a message. Every request records the
+   * group id on the task, so a result can find its way back to this conversation.
+   */
+  async postGroupMessage(
+    groupId: string,
+    input: PostGroupMessageInput
+  ): Promise<{ message: GroupMessage; receipt: SubmitReceipt | null; group: GroupView }> {
+    await this.open();
+    const body = String(input.body ?? '').trim();
+    const mentions = (input.mentions ?? []).map(normalizeMention);
+    if (!body && mentions.length === 0) {
+      throw new AsyncValidationError([{ field: 'body', message: '消息不能为空' }]);
+    }
+    const sender = normalizeSender(input.sender);
+    if (!sender.agentId) throw new AsyncValidationError([{ field: 'sender.agentId', message: '缺少发送方' }]);
+
+    const current = this.store.snapshot.groups[groupId];
+    if (!current) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+
+    const requests = mentions.filter((mention) => mention.client && mention.model && mention.project);
+    // A request without a project would let the client pick a folder, and the
+    // session would land in whatever project was last used.
+    const missing = mentions.filter((mention) => mention.client && !mention.project);
+    if (missing.length > 0) {
+      throw new AsyncValidationError(
+        missing.map((mention, index) => ({
+          field: `mentions[${index}].project`,
+          message: `@${mention.target} 需要指定项目目录`,
+        }))
+      );
+    }
+
+    const at = this.stamp();
+    const { messageId } = await this.store.mutate((state) => {
+      const group = state.groups[groupId];
+      if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      const member = upsertMember(state, groupId, {
+        agentId: sender.agentId,
+        displayName: sender.displayName,
+        app: sender.app,
+        device: sender.device,
+        chatId: sender.chatId,
+        sessionId: null,
+        model: null,
+        role: requests.length > 0 ? 'worker' : 'observer',
+        joinedBy: 'self',
+        at,
+      });
+      if (!group.memberIds.includes(member.id)) {
+        group.memberIds.push(member.id);
+        appendGroupMessage(state, {
+          group,
+          kind: 'join',
+          sender: groupMemberSender(member),
+          body: member.sessionId
+            ? `${member.displayName} 已加入（会话 ${member.sessionId}）`
+            : `${member.displayName} 已加入`,
+          mentions: [],
+          state: 'sent',
+          reason: null,
+          at,
+        });
+      }
+      const message = appendGroupMessage(state, {
+        group,
+        kind: requests.length > 0 ? 'request' : 'text',
+        sender,
+        body: body || `@${mentions.map((mention) => mention.target).join(' @')}`,
+        mentions,
+        state: 'sent',
+        reason: null,
+        at,
+      });
+      group.updatedAt = at;
+      return {
+        result: { messageId: message.id },
+        events: [{ kind: 'group.message', message: body.slice(0, 80) }],
+      };
+    });
+
+    let receipt: SubmitReceipt | null = null;
+    if (requests.length > 0) {
+      receipt = await this.submit({
+        groupId,
+        topic: { name: current.name, id: current.topicId },
+        title: titleFromBody(body, requests),
+        body: body || '（无正文，按 @ 中的要求执行）',
+        authorization: {
+          scopes: requests.map((mention) => stageKindFor(mention)),
+          allowChain: false,
+        },
+        origin: {
+          app: sender.app || 'relay',
+          device: sender.device || 'local',
+          chatId: sender.chatId || `group:${groupId}`,
+          senderId: sender.agentId,
+          workflowIds: [],
+        },
+        stages: requests.map((mention) => ({
+          kind: stageKindFor(mention),
+          label: `@${mention.target}`,
+          client: mention.client as string,
+          project: mention.project as { id: string; path: string },
+          session: mention.session ?? { policy: 'new' as const, sessionId: null },
+          model: mention.model as ModelConfig,
+          completion: mention.completion ?? {
+            condition: `完成 ${mention.target} 的请求`,
+            requiresEvidence: false,
+          },
+          callback: { app: sender.app || 'relay', device: sender.device || 'local', chatId: sender.chatId },
+          queueIfUnavailable: true,
+        })),
+      });
+      await this.markRequestDispatched(groupId, messageId, receipt);
+    }
+
+    const group = await this.group(groupId);
+    if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+    const message = group.messages.find((item) => item.id === messageId);
+    if (!message) throw new AsyncNotFoundError('消息写入失败');
+    return { message, receipt, group };
+  }
+
+  /**
+   * Register an agent's session into a group.
+   *
+   * This is the join the receiving side performs after it accepts a request: the
+   * group keeps the session id so "who is working here, in which session" has an
+   * answer that is not a guess.
+   */
+  async joinGroup(
+    groupId: string,
+    input: JoinGroupInput
+  ): Promise<{ member: GroupMember; group: GroupView }> {
+    await this.open();
+    const agentId = String(input.agentId ?? '').trim();
+    if (!agentId) throw new AsyncValidationError([{ field: 'agentId', message: '缺少 Agent 标识' }]);
+    const at = this.stamp();
+    const memberId = await this.store.mutate((state) => {
+      const group = state.groups[groupId];
+      if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      const before = group.memberIds
+        .map((id) => state.groupMembers[id])
+        .find((member): member is GroupMember => member !== undefined && member.agentId === agentId);
+      const member = upsertMember(state, groupId, {
+        agentId,
+        displayName: input.displayName || agentDisplayName(agentId),
+        app: input.app || agentId,
+        device: input.device || 'local',
+        chatId: input.chatId ?? null,
+        sessionId: input.sessionId ?? null,
+        model: input.model ?? null,
+        role: 'worker',
+        joinedBy: 'self',
+        at,
+      });
+      if (!group.memberIds.includes(member.id)) group.memberIds.push(member.id);
+      const sessionChanged = input.sessionId && before?.sessionId !== input.sessionId;
+      if (!before || sessionChanged) {
+        appendGroupMessage(state, {
+          group,
+          kind: 'join',
+          sender: groupMemberSender(member),
+          body: member.sessionId
+            ? `${member.displayName} 已加入（会话 ${member.sessionId}）`
+            : `${member.displayName} 已加入`,
+          mentions: [],
+          state: 'sent',
+          reason: null,
+          at,
+        });
+      }
+      group.updatedAt = at;
+      return { result: member.id, events: [{ kind: 'group.join', message: agentId }] };
+    });
+    const view = await this.group(groupId);
+    const member = view?.members.find((item) => item.id === memberId);
+    if (!view || !member) throw new AsyncNotFoundError('加入失败');
+    this.emit({ type: 'group.joined', at, message: `${member.displayName} 已加入` });
+    return { member, group: view };
+  }
+
+  /**
+   * Report a finished request back into the group.
+   *
+   * The group message is the visible reply; the callback underneath routes the
+   * result into the chat that asked, with the same deduplication as any other
+   * callback. A result never implies the next stage already ran.
+   */
+  async reportGroupResult(
+    groupId: string,
+    input: ReportGroupResultInput
+  ): Promise<{ message: GroupMessage; callback: CallbackReceipt; group: GroupView }> {
+    await this.open();
+    const state = this.store.snapshot;
+    const group = state.groups[groupId];
+    if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+    const task = state.tasks[input.taskId];
+    if (!task) throw new AsyncNotFoundError(`未找到任务：${input.taskId}`);
+    if (task.groupId && task.groupId !== groupId) {
+      throw new AsyncValidationError([{ field: 'taskId', message: '该任务不属于这个群' }]);
+    }
+    const stageId = input.stageId ?? task.stageIds.at(-1);
+    if (!stageId) throw new AsyncNotFoundError('任务没有阶段');
+    const stage = state.stages[stageId];
+    if (!stage) throw new AsyncNotFoundError(`未找到阶段：${stageId}`);
+    const runId = stage.runIds.at(-1);
+    if (!runId) throw new AsyncNotFoundError('该阶段还没有执行实例');
+
+    const callback = await this.recordCallback({
+      taskId: task.id,
+      stageId,
+      runId,
+      outcome: input.outcome,
+      summary: input.summary,
+      ...(input.evidence ? { evidence: input.evidence } : {}),
+      ...(input.limits ? { limits: input.limits } : {}),
+    });
+
+    const sender = normalizeSender(input.sender);
+    const mentions =
+      input.mentions && input.mentions.length > 0
+        ? input.mentions.map(normalizeMention)
+        : [{ target: task.origin.senderId || task.origin.app }];
+    const at = this.stamp();
+    const messageId = await this.store.mutate((state2) => {
+      const currentGroup = state2.groups[groupId];
+      if (!currentGroup) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      const member = upsertMember(state2, groupId, {
+        agentId: sender.agentId,
+        displayName: sender.displayName,
+        app: sender.app,
+        device: sender.device,
+        chatId: sender.chatId,
+        sessionId: runIdSession(state2, runId),
+        model: stage.model,
+        role: 'worker',
+        joinedBy: 'self',
+        at,
+      });
+      if (!currentGroup.memberIds.includes(member.id)) currentGroup.memberIds.push(member.id);
+      const message = appendGroupMessage(state2, {
+        group: currentGroup,
+        kind: 'result',
+        sender,
+        body: input.summary,
+        mentions,
+        taskId: task.id,
+        stageId,
+        runId,
+        outcome: input.outcome,
+        state: groupStateFromDelivery(callback.delivery.state),
+        reason: callback.delivery.reason,
+        at,
+      });
+      currentGroup.updatedAt = at;
+      return {
+        result: message.id,
+        events: [{ kind: 'group.result', message: input.summary.slice(0, 80), taskId: task.id }],
+      };
+    });
+
+    const view = await this.group(groupId);
+    if (!view) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+    const message = view.messages.find((item) => item.id === messageId);
+    if (!message) throw new AsyncNotFoundError('回传写入失败');
+    this.emit({
+      type: 'group.result',
+      at,
+      taskId: task.id,
+      stageId,
+      message: input.summary,
+      outcome: input.outcome,
+    });
+    return { message, callback, group: view };
+  }
+
+  /** Write the dispatch outcome back onto the request message. */
+  private async markRequestDispatched(
+    groupId: string,
+    messageId: string,
+    receipt: SubmitReceipt
+  ): Promise<void> {
+    const at = this.stamp();
+    await this.store.mutate((state) => {
+      const message = state.groupMessages[messageId];
+      const group = state.groups[groupId];
+      if (!message) return { result: null };
+      message.taskId = receipt.taskId;
+      message.stageId = receipt.stageId;
+      message.runId = receipt.runId;
+      message.state = receipt.phase === 'delivered' ? 'delivered' : 'queued';
+      message.reason = receipt.reason;
+      if (group && !group.taskIds.includes(receipt.taskId)) group.taskIds.push(receipt.taskId);
+      // A delivered request that reported a session is a member that has joined.
+      if (receipt.sessionId) {
+        const stage = state.stages[receipt.stageId];
+        const client = stage?.client ?? receipt.client;
+        const member = upsertMember(state, groupId, {
+          agentId: client,
+          displayName: agentDisplayName(client),
+          app: client,
+          device: 'local',
+          chatId: null,
+          sessionId: receipt.sessionId,
+          model: stage?.model ?? null,
+          role: 'worker',
+          joinedBy: 'mention',
+          at,
+        });
+        if (group && !group.memberIds.includes(member.id)) {
+          group.memberIds.push(member.id);
+          appendGroupMessage(state, {
+            group,
+            kind: 'join',
+            sender: groupMemberSender(member),
+            body: `${member.displayName} 已加入（会话 ${receipt.sessionId}）`,
+            mentions: [],
+            state: 'sent',
+            reason: null,
+            at,
+          });
+        }
+      }
+      if (group) group.updatedAt = at;
+      return { result: null, events: [{ kind: 'group.request.dispatched', message: message.state }] };
+    });
   }
 
   /* -------------------------------------------------------------- callbacks */
@@ -1565,6 +2048,181 @@ function buildReceiptForStage(store: AsyncStore, taskId: string, stageId: string
     acceptedAt: run.createdAt,
     idempotent: false,
   };
+}
+
+/* ------------------------------------------------------------- group helpers */
+
+function normalizeSender(sender: {
+  agentId?: string;
+  displayName?: string;
+  app?: string;
+  device?: string;
+  chatId?: string;
+}): { agentId: string; displayName: string; app: string; device: string; chatId: string } {
+  const agentId = String(sender?.agentId ?? '').trim();
+  return {
+    agentId,
+    displayName: String(sender?.displayName ?? '').trim() || agentDisplayName(agentId),
+    app: String(sender?.app ?? '').trim() || agentId,
+    device: String(sender?.device ?? '').trim() || 'local',
+    chatId: String(sender?.chatId ?? '').trim(),
+  };
+}
+
+function agentDisplayName(agentId: string): string {
+  const names: Record<string, string> = {
+    codex: 'Codex',
+    zcode: 'ZCode',
+    workbuddy: 'WorkBuddy',
+    factory: 'Factory',
+    relay: 'Relay',
+  };
+  return names[agentId] ?? agentId;
+}
+
+function groupMemberSender(member: GroupMember) {
+  return {
+    agentId: member.agentId,
+    displayName: member.displayName,
+    app: member.app,
+    device: member.device,
+    chatId: member.chatId ?? '',
+  };
+}
+
+function normalizeMention(mention: GroupMention): GroupMention {
+  return {
+    target: String(mention?.target ?? '').trim(),
+    ...(mention.client ? { client: String(mention.client).trim() } : {}),
+    ...(mention.model
+      ? {
+          model: {
+            account: String(mention.model.account ?? '').trim(),
+            provider: String(mention.model.provider ?? mention.model.account ?? '').trim(),
+            modelId: String(mention.model.modelId ?? '').trim(),
+            reasoning: String(mention.model.reasoning ?? '').trim(),
+          },
+        }
+      : {}),
+    ...(mention.project ? { project: { id: mention.project.id, path: mention.project.path } } : {}),
+    ...(mention.session ? { session: mention.session } : {}),
+    ...(mention.completion ? { completion: mention.completion } : {}),
+  };
+}
+
+function stageKindFor(mention: GroupMention): string {
+  const body = `${mention.target} ${mention.client ?? ''}`.toLowerCase();
+  if (body.includes('review') || body.includes('审查')) return 'review';
+  if (body.includes('verify') || body.includes('验证')) return 'verify';
+  return 'develop';
+}
+
+function titleFromBody(body: string, requests: GroupMention[]): string {
+  const firstLine = body.split(/\r?\n/)[0]?.trim() ?? '';
+  if (firstLine) return firstLine.slice(0, 60);
+  return `@${requests.map((mention) => mention.target).join(' @')} 的请求`;
+}
+
+function upsertMember(
+  state: AsyncState,
+  groupId: string,
+  input: {
+    agentId: string;
+    displayName: string;
+    app: string;
+    device: string;
+    chatId: string | null;
+    sessionId: string | null;
+    model: ModelConfig | null;
+    role: GroupMember['role'];
+    joinedBy: GroupMember['joinedBy'];
+    at: string;
+  }
+): GroupMember {
+  const existing = Object.values(state.groupMembers).find(
+    (member) => member.groupId === groupId && member.agentId === input.agentId
+  );
+  if (existing) {
+    // Presence is sticky: a later message must not erase the session that proves
+    // this member is really working in this group.
+    if (input.sessionId) existing.sessionId = input.sessionId;
+    if (input.chatId) existing.chatId = input.chatId;
+    if (input.model) existing.model = input.model;
+    if (input.role === 'owner') existing.role = 'owner';
+    return existing;
+  }
+  const member: GroupMember = {
+    id: createId('member'),
+    groupId,
+    agentId: input.agentId,
+    displayName: input.displayName,
+    role: input.role,
+    sessionId: input.sessionId,
+    app: input.app,
+    device: input.device,
+    chatId: input.chatId,
+    model: input.model,
+    joinedAt: input.at,
+    joinedBy: input.joinedBy,
+  };
+  state.groupMembers[member.id] = member;
+  return member;
+}
+
+function appendGroupMessage(
+  state: AsyncState,
+  input: {
+    group: Group;
+    kind: GroupMessage['kind'];
+    sender: GroupMessage['sender'];
+    body: string;
+    mentions: GroupMention[];
+    taskId?: string | null;
+    stageId?: string | null;
+    runId?: string | null;
+    outcome?: CallbackOutcome | null;
+    state: GroupMessage['state'];
+    reason: string | null;
+    at: string;
+  }
+): GroupMessage {
+  const message: GroupMessage = {
+    id: createId('message'),
+    groupId: input.group.id,
+    kind: input.kind,
+    sender: { ...input.sender },
+    body: input.body,
+    mentions: input.mentions,
+    taskId: input.taskId ?? null,
+    stageId: input.stageId ?? null,
+    runId: input.runId ?? null,
+    outcome: input.outcome ?? null,
+    state: input.state,
+    reason: input.reason,
+    createdAt: input.at,
+  };
+  state.groupMessages[message.id] = message;
+  input.group.messageIds.push(message.id);
+  return message;
+}
+
+function groupStateFromDelivery(state: CallbackDeliveryState): GroupMessage['state'] {
+  switch (state) {
+    case 'in-chat':
+    case 'handled':
+      return 'delivered';
+    case 'queued-in-chat':
+    case 'awaiting-host':
+      return 'queued';
+    case 'manual':
+      return 'manual';
+    default:
+      return 'queued';
+  }
+}
+
+function runIdSession(state: AsyncState, runId: string): string | null {
+  return state.runs[runId]?.actual.sessionId ?? null;
 }
 
 export { projectLabel, samePath };

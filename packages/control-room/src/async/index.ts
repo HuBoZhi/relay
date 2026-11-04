@@ -23,7 +23,7 @@ export type {
   DispatchRequest,
 } from './adapters.js';
 export { AsyncEngine, AsyncNotFoundError, AsyncValidationError, stageLabel } from './engine.js';
-export type { EngineEvent, EngineOptions, ValidationIssue } from './engine.js';
+export type { EngineEvent, EngineOptions, GroupSummary, ValidationIssue } from './engine.js';
 export {
   AsyncStore,
   emptyState,

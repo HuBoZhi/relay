@@ -139,7 +139,9 @@ export interface SubmitStageInput {
 export interface SubmitTaskInput {
   /** Client-supplied idempotency key. Derived from the body when omitted. */
   idempotencyKey?: string;
-  topic: { name: string; channel?: string };
+  /** Group this task belongs to, when it was raised by an `@` mention. */
+  groupId?: string;
+  topic: { name: string; channel?: string; id?: string };
   title: string;
   body: string;
   /** What the user authorised. Only these scopes may continue automatically. */
@@ -293,6 +295,8 @@ export interface CallbackRecord {
 export interface Task {
   id: string;
   topicId: string;
+  /** The group conversation this task was raised in, if any. */
+  groupId: string | null;
   title: string;
   body: string;
   authorization: { scopes: string[]; allowChain: boolean };
@@ -306,6 +310,137 @@ export interface Task {
   cancelled: { at: string; reason: string } | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/* ------------------------------------------------------------------ groups */
+
+/**
+ * A group is a topic you can talk in.
+ *
+ * The chat metaphor is not decoration: it fixes who said what to whom. A mention
+ * is an address, a member row is a claim of presence with the session that
+ * proves it, and a result message is the reply that closes the loop in the same
+ * conversation that opened it.
+ */
+export type GroupMemberRole = 'owner' | 'worker' | 'observer';
+
+export interface GroupSender {
+  /** Agent identity inside the group, e.g. `codex`, `zcode`. */
+  agentId: string;
+  displayName: string;
+  app: string;
+  device: string;
+  /** The sender's own desktop chat, when it has one. */
+  chatId: string;
+}
+
+export interface GroupMember {
+  id: string;
+  groupId: string;
+  agentId: string;
+  displayName: string;
+  role: GroupMemberRole;
+  /** Session the member registered itself with. `null` until it reports one. */
+  sessionId: string | null;
+  app: string;
+  device: string;
+  chatId: string | null;
+  model: ModelConfig | null;
+  joinedAt: string;
+  joinedBy: 'creator' | 'mention' | 'self' | 'manual';
+}
+
+/**
+ * One `@` in a message.
+ *
+ * A mention with a `client` and a `model` is a work request: it becomes a task and
+ * is dispatched. A mention without them is just addressing — the message stays a
+ * message.
+ */
+export interface GroupMention {
+  target: string;
+  client?: string;
+  model?: ModelConfig;
+  project?: ProjectBinding;
+  session?: SessionPolicy;
+  completion?: StageCompletion;
+}
+
+export type GroupMessageKind = 'text' | 'request' | 'result' | 'join' | 'system';
+
+/** How far a message's delivery got. Never a stand-in for "the work is done". */
+export type GroupMessageState = 'sent' | 'queued' | 'delivered' | 'manual' | 'failed';
+
+export interface GroupMessage {
+  id: string;
+  groupId: string;
+  kind: GroupMessageKind;
+  sender: GroupSender;
+  body: string;
+  mentions: GroupMention[];
+  taskId: string | null;
+  stageId: string | null;
+  runId: string | null;
+  /** Set on `result` messages. */
+  outcome: CallbackOutcome | null;
+  state: GroupMessageState;
+  /** Why a request stayed queued or a result needs a human. */
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface Group {
+  id: string;
+  topicId: string;
+  /** What the user typed when creating it; also the topic display name. */
+  name: string;
+  slug: string;
+  createdBy: GroupSender;
+  memberIds: string[];
+  messageIds: string[];
+  taskIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateGroupInput {
+  name: string;
+  creator: GroupSender;
+}
+
+export interface PostGroupMessageInput {
+  sender: GroupSender;
+  body: string;
+  mentions?: GroupMention[];
+}
+
+export interface JoinGroupInput {
+  agentId: string;
+  displayName?: string;
+  sessionId?: string | null;
+  app?: string;
+  device?: string;
+  chatId?: string | null;
+  model?: ModelConfig | null;
+}
+
+export interface ReportGroupResultInput {
+  sender: GroupSender;
+  taskId: string;
+  stageId?: string;
+  outcome: CallbackOutcome;
+  summary: string;
+  evidence?: CallbackEvidence;
+  limits?: string[];
+  /** Defaults to the task origin: the chat that asked for the work. */
+  mentions?: GroupMention[];
+}
+
+export interface GroupView {
+  group: Group;
+  members: GroupMember[];
+  messages: GroupMessage[];
+  tasks: Task[];
 }
 
 /* ---------------------------------------------------------------- receipts */

@@ -16,6 +16,8 @@ const PREFIX = {
   run: 'run',
   message: 'msg',
   callback: 'cb',
+  group: 'grp',
+  member: 'mbr',
 } as const;
 
 export type IdKind = keyof typeof PREFIX;

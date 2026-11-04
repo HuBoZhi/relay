@@ -162,6 +162,82 @@ describe('async HTTP API', () => {
     });
   });
 
+  it('opens a group and dispatches an @ request through the chat endpoint', async () => {
+    await withServer(async (base) => {
+      const created = await post(`${base}/api/groups`, {
+        name: '20261104-MediaDock-需求开发2',
+        creator: {
+          agentId: 'codex',
+          displayName: 'Codex',
+          app: 'codex',
+          device: 'desktop-01',
+          chatId: 'chat_original_7',
+        },
+      });
+      expect(created.status).toBe(201);
+      const view = (await created.json()) as { group: { id: string } };
+
+      const response = await post(`${base}/api/groups/${view.group.id}/messages`, {
+        sender: {
+          agentId: 'codex',
+          displayName: 'Codex',
+          app: 'codex',
+          device: 'desktop-01',
+          chatId: 'chat_original_7',
+        },
+        body: '把登录页空状态补上',
+        mentions: [
+          {
+            target: 'zcode',
+            client: 'zcode',
+            project: { id: 'proj_mediadock', path: 'D:////Work////MediaDock' },
+            model: { account: 'BigModel', provider: 'zhipu', modelId: 'GLM-5.3-Flash', reasoning: 'max' },
+          },
+        ],
+      });
+      expect(response.status).toBe(202);
+      const body = (await response.json()) as {
+        message: { kind: string; state: string };
+        receipt: { phase: string } | null;
+      };
+      expect(body.message.kind).toBe('request');
+      expect(body.receipt?.phase).toBe('queued');
+      expect(body.message.state).toBe('queued');
+    });
+  });
+
+  it('rejects a group request with no project and names the mention', async () => {
+    await withServer(async (base) => {
+      const created = (await (
+        await post(`${base}/api/groups`, {
+          name: '群X',
+          creator: {
+            agentId: 'codex',
+            displayName: 'Codex',
+            app: 'codex',
+            device: 'desktop-01',
+            chatId: 'chat_1',
+          },
+        })
+      ).json()) as { group: { id: string } };
+
+      const response = await post(`${base}/api/groups/${created.group.id}/messages`, {
+        sender: { agentId: 'codex', app: 'codex', chatId: 'chat_1' },
+        body: '干活',
+        mentions: [
+          {
+            target: 'zcode',
+            client: 'zcode',
+            model: { account: 'BigModel', provider: 'zhipu', modelId: 'GLM-5.3-Flash', reasoning: 'max' },
+          },
+        ],
+      });
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { issues: { field: string }[] };
+      expect(body.issues[0]?.field).toBe('mentions[0].project');
+    });
+  });
+
   it('keeps the read-only observer endpoints working next to the task routes', async () => {
     await withServer(async (base) => {
       const health = (await (await fetch(`${base}/api/health`)).json()) as { ok: boolean };

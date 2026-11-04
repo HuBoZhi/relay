@@ -21,6 +21,9 @@ import { join, resolve } from 'node:path';
 import type {
   CallbackRecord,
   ClientCapabilityView,
+  Group,
+  GroupMember,
+  GroupMessage,
   MessageRecord,
   Run,
   Stage,
@@ -44,6 +47,10 @@ export interface IdempotencyRecord {
 export interface AsyncState {
   version: number;
   topics: Record<string, Topic>;
+  /** Topic name → group id, so the same topic name never opens a second group. */
+  groups: Record<string, Group>;
+  groupMembers: Record<string, GroupMember>;
+  groupMessages: Record<string, GroupMessage>;
   tasks: Record<string, Task>;
   stages: Record<string, Stage>;
   runs: Record<string, Run>;
@@ -63,6 +70,9 @@ export function emptyState(): AsyncState {
   return {
     version: STATE_VERSION,
     topics: {},
+    groups: {},
+    groupMembers: {},
+    groupMessages: {},
     tasks: {},
     stages: {},
     runs: {},
@@ -254,6 +264,9 @@ function migrate(parsed: Partial<AsyncState>): AsyncState {
     ...parsed,
     version: STATE_VERSION,
     topics: parsed.topics ?? base.topics,
+    groups: parsed.groups ?? base.groups,
+    groupMembers: parsed.groupMembers ?? base.groupMembers,
+    groupMessages: parsed.groupMessages ?? base.groupMessages,
     tasks: parsed.tasks ?? base.tasks,
     stages: parsed.stages ?? base.stages,
     runs: parsed.runs ?? base.runs,

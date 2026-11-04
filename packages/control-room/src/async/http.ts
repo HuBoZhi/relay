@@ -17,7 +17,14 @@ import type http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 
 import { AsyncEngine, AsyncNotFoundError, AsyncValidationError, type EngineEvent } from './engine.js';
-import type { RecordCallbackInput, SubmitTaskInput } from './contracts.js';
+import type {
+  CreateGroupInput,
+  JoinGroupInput,
+  PostGroupMessageInput,
+  RecordCallbackInput,
+  ReportGroupResultInput,
+  SubmitTaskInput,
+} from './contracts.js';
 
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -123,7 +130,8 @@ export function createAsyncHttpHandler(options: AsyncHttpOptions): AsyncHttpHand
 
   return {
     async handle(request, response, url): Promise<boolean> {
-      if (!url.pathname.startsWith('/api/async')) return false;
+      // Two prefixes: task-level routes and the group chat in front of them.
+      if (!url.pathname.startsWith('/api/async') && !url.pathname.startsWith('/api/groups')) return false;
       const method = (request.method ?? 'GET').toUpperCase();
       if (!['GET', 'HEAD', 'POST'].includes(method)) {
         fail(response, 405, '不支持的请求方法');
@@ -251,6 +259,61 @@ async function route(ctx: Ctx, engine: AsyncEngine): Promise<void> {
     });
     if (!run) throw new AsyncNotFoundError('未找到该执行实例');
     json(ctx.response, 200, run);
+    return;
+  }
+
+  if (method === 'GET' && path === '/api/groups') {
+    json(ctx.response, 200, { groups: await engine.listGroups() });
+    return;
+  }
+
+  if (method === 'POST' && path === '/api/groups') {
+    const body = await readJson(ctx.request);
+    const view = await engine.createGroup(body as unknown as CreateGroupInput);
+    json(ctx.response, 201, view);
+    return;
+  }
+
+  const groupMatch = /^\/api\/groups\/([^/]+)$/.exec(path);
+  if (method === 'GET' && groupMatch) {
+    const view = await engine.group(decodeURIComponent(groupMatch[1] ?? ''));
+    if (!view) throw new AsyncNotFoundError('未找到该群');
+    json(ctx.response, 200, view);
+    return;
+  }
+
+  const groupMessages = /^\/api\/groups\/([^/]+)\/messages$/.exec(path);
+  if (method === 'POST' && groupMessages) {
+    const body = await readJson(ctx.request);
+    const result = await engine.postGroupMessage(
+      decodeURIComponent(groupMessages[1] ?? ''),
+      body as unknown as PostGroupMessageInput
+    );
+    // 202: the message is stored and any request it carried was dispatched, but
+    // nobody is waiting for the work itself.
+    json(ctx.response, 202, result);
+    return;
+  }
+
+  const groupJoin = /^\/api\/groups\/([^/]+)\/join$/.exec(path);
+  if (method === 'POST' && groupJoin) {
+    const body = await readJson(ctx.request);
+    const result = await engine.joinGroup(
+      decodeURIComponent(groupJoin[1] ?? ''),
+      body as unknown as JoinGroupInput
+    );
+    json(ctx.response, 200, result);
+    return;
+  }
+
+  const groupResults = /^\/api\/groups\/([^/]+)\/results$/.exec(path);
+  if (method === 'POST' && groupResults) {
+    const body = await readJson(ctx.request);
+    const result = await engine.reportGroupResult(
+      decodeURIComponent(groupResults[1] ?? ''),
+      body as unknown as ReportGroupResultInput
+    );
+    json(ctx.response, 202, result);
     return;
   }
 
