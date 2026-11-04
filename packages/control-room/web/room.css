@@ -1285,3 +1285,21 @@ dialog[open] { animation: cinematic-dialog-in 360ms var(--ease-out); }
   .traffic-line { stroke-dashoffset: 0; }
   .channel-item:hover, .agent-card:hover { transform: none; }
 }
+
+/* Task workspace entry. Sits under the overview button, so it inherits the same
+   hit area but cancels that button's bottom margin. */
+.nav-tasks {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: -20px 0 28px;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #91a6b9;
+  font-size: 12px;
+  text-decoration: none;
+}
+.nav-tasks:hover { background: #19232b; border-color: #26343d; color: #dff8f4; }
+.nav-tasks > [data-icon] { color: var(--cyan); }
+.nav-tasks small { margin-left: auto; color: #4e697f; font: 10px var(--mono); }
