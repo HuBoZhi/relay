@@ -7,6 +7,8 @@
  * The value is never echoed back to the terminal, and `--demo` never needs one.
  */
 
+import { AsyncEngine } from './async/engine.js';
+import { HttpBridgeAdapter } from './async/adapters.js';
 import { resolveTimezone } from './format.js';
 import { DemoControlRoomSource } from './demo-source.js';
 import { RelayControlRoomSource } from './relay-source.js';
@@ -22,6 +24,11 @@ interface CliOptions {
   stream: boolean;
   refreshMs?: number;
   allowRemote: boolean;
+  /** Mount the task engine; the observer pages then gain a task workspace. */
+  tasks: boolean;
+  dataRoot?: string;
+  /** `client=url` pairs for local dispatch bridges. */
+  bridges: { client: string; url: string }[];
   help: boolean;
 }
 
@@ -38,6 +45,9 @@ const USAGE = `用法：relay-control-room [选项]
   --refresh-ms <毫秒>      频道与工作状态的刷新间隔，默认 20000
   --no-stream              关闭实时事件流，仅定时刷新
   --demo                   使用演示数据启动，不连接任何服务
+  --tasks                  启用异步任务引擎（派发、回传、阶段链）
+  --data-root <目录>       任务数据目录，默认取非系统盘上的 RelayData\async
+  --bridge <客户端=地址>   注册本机派发桥接，可重复，地址必须是回环地址
   --allow-remote           允许监听非回环地址（凭据可读整个工作空间，请谨慎）
   --help                   显示本说明
 
@@ -54,6 +64,8 @@ export function parseArgs(argv: string[]): CliOptions {
     demo: false,
     stream: true,
     allowRemote: false,
+    tasks: false,
+    bridges: [],
     help: false,
   };
 
@@ -97,6 +109,19 @@ export function parseArgs(argv: string[]): CliOptions {
       case '--allow-remote':
         options.allowRemote = true;
         break;
+      case '--tasks':
+        options.tasks = true;
+        break;
+      case '--data-root':
+        options.dataRoot = next();
+        break;
+      case '--bridge': {
+        const value = next();
+        const split = value.indexOf('=');
+        if (split <= 0) throw new Error('--bridge 需要 <客户端=地址> 形式');
+        options.bridges.push({ client: value.slice(0, split), url: value.slice(split + 1) });
+        break;
+      }
       case '--help':
       case '-h':
         options.help = true;
@@ -170,12 +195,26 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     source = relay;
   }
 
+  // The task engine is opt-in: an install that only observes must not gain a
+  // write surface, or a port it did not need.
+  let engine: AsyncEngine | null = null;
+  if (options.tasks) {
+    engine = new AsyncEngine({
+      ...(options.dataRoot ? { dataRoot: options.dataRoot } : {}),
+      adapters: options.bridges.map(
+        (bridge) => new HttpBridgeAdapter({ client: bridge.client, baseUrl: bridge.url })
+      ),
+    });
+    await engine.open();
+  }
+
   let server;
   try {
     server = await startControlRoom({
       source,
       port: options.port,
       host: options.host,
+      ...(engine ? { async: { engine } } : {}),
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -203,6 +242,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     `  模式：${source.mode === 'demo' ? '演示数据（未连接 Relay 服务）' : `只读观察 · ${source.target}`}`
   );
   console.log(`  时区：${timezone}`);
+  if (engine) {
+    console.log(`  任务引擎：已启用 · 数据目录 ${engine.dataRoot}`);
+    if (engine.warnings.length > 0) for (const warning of engine.warnings) console.log(`  注意：${warning}`);
+  } else {
+    console.log('  任务引擎：未启用（只读观察）');
+  }
   console.log('  凭据仅保存在本进程内，不会发送到浏览器。按 Ctrl+C 停止。');
   console.log('');
 
@@ -216,6 +261,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     closing = true;
     await server.close().catch(() => undefined);
     await source.close().catch(() => undefined);
+    if (engine) await engine.close().catch(() => undefined);
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown());

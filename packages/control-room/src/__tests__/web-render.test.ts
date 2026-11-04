@@ -193,8 +193,11 @@ describe('control room renderer', () => {
     view.stream('bootstrap', { bootstrap });
     await new Promise((settle) => setTimeout(settle, 300));
     expect(view.count('[data-channel="engineering"]')).toBe(0);
-    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
-    view.close(); view = await render(server.url, { storage });
+    const storage = Object.fromEntries(
+      Object.keys(view.window.localStorage).map((key) => [key, view!.window.localStorage.getItem(key)!])
+    );
+    view.close();
+    view = await render(server.url, { storage });
     view.click('[data-filter="archived"]');
     expect(view.count('[data-channel="engineering"]')).toBe(1);
     view.click('[data-channel="engineering"]');
@@ -205,7 +208,9 @@ describe('control room renderer', () => {
     expect(view.count('[data-channel="engineering"]')).toBe(1);
     expect(view.text('#filter-count-archived')).toBe('0');
     expect((await source.bootstrap()).channels).toEqual(bootstrap.channels);
-    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } } });
+    view.stream('bootstrap', {
+      bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } },
+    });
     expect(view.text('#filter-count-archived')).toBe('0');
     await new Promise((settle) => setTimeout(settle, 300));
   }, 20_000);
@@ -215,8 +220,13 @@ describe('control room renderer', () => {
     server = await startHttpTestServer({ source, log: () => {} });
     view = await render(server.url);
     const proto = view.window.HTMLDialogElement.prototype;
-    proto.showModal = function () { this.open = true; };
-    proto.close = function () { this.open = false; this.dispatchEvent(new view!.window.Event('close')); };
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+      this.dispatchEvent(new view!.window.Event('close'));
+    };
     const bootstrap = await source.bootstrap();
     view.click('[data-channel="engineering"]');
     await new Promise((settle) => setTimeout(settle, 300));
@@ -225,19 +235,26 @@ describe('control room renderer', () => {
     view.click('#delete-channel-cancel');
     expect(view.count('[data-channel="engineering"]')).toBe(1);
     view.click('#delete-channel');
-    view.window.document.querySelector('#delete-channel-form')!.dispatchEvent(new view.window.Event('submit', { cancelable: true }));
+    view.window.document
+      .querySelector('#delete-channel-form')!
+      .dispatchEvent(new view.window.Event('submit', { cancelable: true }));
     expect(view.count('[data-channel="engineering"]')).toBe(0);
     view.click('[data-filter="archived"]');
     expect(view.count('[data-channel="engineering"]')).toBe(0);
     view.stream('bootstrap', { bootstrap });
     await new Promise((settle) => setTimeout(settle, 300));
-    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
-    view.close(); view = await render(server.url, { storage });
+    const storage = Object.fromEntries(
+      Object.keys(view.window.localStorage).map((key) => [key, view!.window.localStorage.getItem(key)!])
+    );
+    view.close();
+    view = await render(server.url, { storage });
     expect(view.count('[data-channel="engineering"]')).toBe(0);
     expect(view.count('#network [data-graph-channel="engineering"]')).toBe(0);
     expect((await source.bootstrap()).channels).toEqual(bootstrap.channels);
     expect((await source.messages('engineering', { limit: 50 })).messages.length).toBeGreaterThan(0);
-    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } } });
+    view.stream('bootstrap', {
+      bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another' } },
+    });
     expect(view.count('[data-channel="engineering"]')).toBe(1);
     await new Promise((settle) => setTimeout(settle, 300));
   }, 20_000);
@@ -248,7 +265,11 @@ describe('control room renderer', () => {
     view = await render(server.url);
     view.click('[data-channel="engineering"]');
     await new Promise((settle) => setTimeout(settle, 300));
-    Object.defineProperty(view.window.Storage.prototype, 'setItem', { value() { throw new Error('quota'); } });
+    Object.defineProperty(view.window.Storage.prototype, 'setItem', {
+      value() {
+        throw new Error('quota');
+      },
+    });
     view.click('#archive-channel');
     expect(view.count('[data-channel="engineering"]')).toBe(1);
     expect(view.text('#filter-count-archived')).toBe('0');
@@ -264,7 +285,9 @@ describe('control room renderer', () => {
     view.click('#rename-channel');
     const input = view.window.document.querySelector<HTMLInputElement>('#channel-name-input')!;
     input.value = '  核心研发 <团队>  ';
-    view.window.document.querySelector('#rename-form')!.dispatchEvent(new view.window.Event('submit', { cancelable: true }));
+    view.window.document
+      .querySelector('#rename-form')!
+      .dispatchEvent(new view.window.Event('submit', { cancelable: true }));
     expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
     expect(view.text('[data-channel="engineering"] strong')).toBe('核心研发 <团队>');
     expect(view.text('#breadcrumb-current')).toBe('# 核心研发 <团队>');
@@ -276,12 +299,19 @@ describe('control room renderer', () => {
     view.stream('bootstrap', { bootstrap });
     await new Promise((settle) => setTimeout(settle, 300));
     expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
-    const storage = Object.fromEntries(Object.keys(view.window.localStorage).map(key => [key, view!.window.localStorage.getItem(key)!]));
+    const storage = Object.fromEntries(
+      Object.keys(view.window.localStorage).map((key) => [key, view!.window.localStorage.getItem(key)!])
+    );
     view.close();
     view = await render(server.url, { storage });
     view.click('[data-channel="engineering"]');
     expect(view.text('#page-title')).toBe('# 核心研发 <团队>');
-    view.stream('bootstrap', { bootstrap: { ...bootstrap, workspace: { ...bootstrap.workspace, id: 'another-workspace', name: 'another-workspace' } } });
+    view.stream('bootstrap', {
+      bootstrap: {
+        ...bootstrap,
+        workspace: { ...bootstrap.workspace, id: 'another-workspace', name: 'another-workspace' },
+      },
+    });
     expect(view.text('#page-title')).toBe('# 工程研发');
     view.stream('bootstrap', { bootstrap });
     await new Promise((settle) => setTimeout(settle, 300));
@@ -299,7 +329,10 @@ describe('control room renderer', () => {
     await new Promise((settle) => setTimeout(settle, 300));
     view.click('#rename-channel');
     const input = view.window.document.querySelector<HTMLInputElement>('#channel-name-input')!;
-    const submit = () => view!.window.document.querySelector('#rename-form')!.dispatchEvent(new view!.window.Event('submit', { cancelable: true }));
+    const submit = () =>
+      view!.window.document
+        .querySelector('#rename-form')!
+        .dispatchEvent(new view!.window.Event('submit', { cancelable: true }));
     input.value = '   ';
     submit();
     expect(input.validationMessage).toContain('主题名称');
@@ -309,7 +342,11 @@ describe('control room renderer', () => {
     expect(view.text('#page-title')).toBe('# 工程研发');
     view.click('#rename-channel');
     input.value = '保存失败';
-    Object.defineProperty(view.window.Storage.prototype, 'setItem', { value() { throw new Error('quota'); } });
+    Object.defineProperty(view.window.Storage.prototype, 'setItem', {
+      value() {
+        throw new Error('quota');
+      },
+    });
     submit();
     expect(view.text('#toast')).toContain('名称保存失败');
     expect(view.text('#page-title')).toBe('# 工程研发');
@@ -332,7 +369,7 @@ describe('control room renderer', () => {
     expect(view.count('.observed-flow')).toBe(0);
     view.stream('agents', {
       ...bootstrap,
-      channels: bootstrap.channels.filter(channel => channel.state !== 'attention'),
+      channels: bootstrap.channels.filter((channel) => channel.state !== 'attention'),
     });
     expect(view.window.document.body.dataset.page).toBe('overview');
     expect(view.window.document.querySelector<HTMLElement>('.inspector')?.hidden).toBe(true);

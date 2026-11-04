@@ -12,6 +12,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createAsyncHttpHandler, asyncStreamFrame, type AsyncHttpHandler } from './async/http.js';
+import type { AsyncEngine } from './async/engine.js';
 import { localizeDiagnostic } from './format.js';
 import type { ControlRoomSource } from './source.js';
 import type { BootstrapView, MessagePageView, StreamFrame } from './types.js';
@@ -38,6 +40,11 @@ export interface ControlRoomServerOptions {
   /** Override the static directory (tests). Defaults to the packaged `web/`. */
   webRoot?: string;
   log?: (message: string) => void;
+  /**
+   * Mount the task engine. Omitted, the server is read-only as before; the
+   * desktop app passes its engine so the window and the API share one origin.
+   */
+  async?: { engine: AsyncEngine; token?: string };
 }
 
 export interface ControlRoomServer {
@@ -82,6 +89,22 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
   const unsubscribe = source.subscribe((frame) => {
     for (const client of clients) send(client, frame);
   });
+
+  let asyncHandler: AsyncHttpHandler | null = null;
+  let unsubscribeAsync: (() => void) | null = null;
+  if (options.async) {
+    asyncHandler = createAsyncHttpHandler({
+      engine: options.async.engine,
+      ...(options.async.token ? { token: options.async.token } : {}),
+      log,
+    });
+    // Task events use the same SSE pipe as observation frames: the page needs one
+    // connection, and a task update must not depend on the window being focused.
+    unsubscribeAsync = options.async.engine.subscribe((event) => {
+      const frame = asyncStreamFrame(event);
+      for (const client of clients) send(client, frame);
+    });
+  }
 
   const heartbeat = setInterval(() => {
     const frame: StreamFrame = { type: 'ping', at: new Date().toISOString() };
@@ -136,6 +159,8 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
       textError(response, 405, '不支持的请求方法');
       return;
     }
+
+    if (asyncHandler && (await asyncHandler.handle(request, response, url))) return;
 
     if (url.pathname === '/api/health') {
       json(response, 200, { ok: true, mode: source.mode, target: source.target });
@@ -267,6 +292,7 @@ export async function startControlRoom(options: ControlRoomServerOptions): Promi
     async close() {
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribeAsync?.();
       for (const client of clients) client.end();
       clients.clear();
       await new Promise<void>((resolveClose) => server.close(() => resolveClose()));

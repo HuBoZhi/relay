@@ -15,6 +15,8 @@
  *    shows and may fall back to the identifier when no localized name exists.
  */
 
+import type { EngineEvent as AsyncEngineEvent } from './async/engine.js';
+
 /** Where the data comes from. `demo` means no credential was configured. */
 export type ControlRoomMode = 'live' | 'demo';
 
@@ -256,6 +258,7 @@ export interface SearchHitView {
 
 /** Live stream frames. One SSE `event:` name per member. */
 export type StreamFrame =
+  | { type: 'async'; event: AsyncEngineEvent }
   | { type: 'connection'; connection: ConnectionView }
   | { type: 'bootstrap'; bootstrap: BootstrapView }
   | { type: 'message'; message: MessageView }
@@ -269,4 +272,4 @@ export type StreamFrame =
   | { type: 'ping'; at: string };
 
 /** SSE event names, kept in one place so server and client cannot drift. */
-export const STREAM_EVENT_NAMES = ['connection', 'bootstrap', 'message', 'agents', 'ping'] as const;
+export const STREAM_EVENT_NAMES = ['connection', 'bootstrap', 'message', 'agents', 'async', 'ping'] as const;

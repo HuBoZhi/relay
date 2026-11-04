@@ -6,6 +6,7 @@
  */
 
 export * from './types.js';
+export * from './async/index.js';
 export { aggregateChannelState, deriveAgentWork, deriveMetricsFlags, receiptLabel } from './derive.js';
 export { DemoControlRoomSource } from './demo-source.js';
 export type { DemoSourceOptions } from './demo-source.js';
