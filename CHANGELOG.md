@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Desktop Relay places ZCode tasks in the matching desktop project, starts in execution mode, preserves task names, and surfaces confirmation or interruption instead of treating them as progress or completion.
+
 - Desktop Relay discovers ZCode's current service bundle and connected services after client updates, and reports module import failures accurately.
 
 ### Added

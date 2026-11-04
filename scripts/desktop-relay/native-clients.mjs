@@ -118,12 +118,25 @@ export class ZCodeDesktop {
   }
 
   async createSession() {
+    const canonical = path => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
+    const projects = await this.call('projectService', 'readProjects', {});
+    const matches = projects.filter(project => !project.deleted && project.hostId === 'local' &&
+      project.roots.some(root => canonical(root.rootPath) === canonical(this.workspace)));
+    if (matches.length > 1) throw new Error('Multiple ZCode projects match this workspace');
+    const project = matches[0];
+    // ZCode uses the stored root string as a workspace identity. Preserve it,
+    // even when another slash spelling points to the same physical directory.
+    if (project) this.workspace = project.roots.find(root => canonical(root.rootPath) === canonical(this.workspace)).rootPath;
     const task = await this.call('zcodeTaskService', 'createTask', {
-      workspacePath: this.workspace, mode: 'plan', v4Create: true, mcpServers: [],
+      workspacePath: this.workspace, mode: 'build', v4Create: true, mcpServers: [],
       modelSelection: this.model ?? { providerId: 'account:bigmodel-individual-coding-plan', modelId: 'GLM-5.3-Flash', options: { reasoningLevel: 'high' } },
     });
     if (!task?.taskId) throw new Error('ZCode did not create a task');
     this.sessionId = task.taskId;
+    if (project) await this.call('projectService', 'moveTask', {
+      task: { taskId: task.taskId, workspacePath: this.workspace, hostId: 'local' },
+      projectId: project.id, hostId: 'local',
+    });
     return { sessionId: task.taskId, title: 'Relay 专用 · ZCode', transport: 'local' };
   }
 
@@ -159,8 +172,15 @@ export class ZCodeDesktop {
       (m.role === 'assistant' || m.info?.role === 'assistant'));
     const response = assistants.flatMap(m => m.parts ?? []).filter(p => p.type === 'text').map(p => p.text ?? p.content ?? '').join('\n');
     const status = snapshot.session?.status;
-    if (status === 'idle' && response && snapshot.session.title !== 'Relay 专用 · ZCode') {
-      await this.call('zcodeTaskService', 'renameTask', { workspacePath: this.workspace, taskId: sessionId, title: 'Relay 专用 · ZCode' });
+    const currentMessages = user ? messages.slice(messages.indexOf(user) + 1) :
+      messages.filter(message => this.baseline && !this.baseline.has(messageId(message)));
+    if (currentMessages.some(message => message.info?.metadata?.runtimeMessage?.source === 'interrupt_marker')) {
+      return { sessionId, requestId, model: snapshot.session?.model, status: 'cancelled', response };
+    }
+    const pending = snapshot.runtime?.pendingRequestIds?.filter(id => id.startsWith('perm_')) ?? [];
+    if (pending.length) {
+      return { sessionId, requestId, model: snapshot.session?.model, status: 'error', response,
+        error: { code: 'desktop_confirmation_required', pendingRequestIds: pending } };
     }
     return { sessionId, requestId, model: snapshot.session?.model, error: snapshot.projection?.lastError, status: status === 'idle' && response ? 'completed' : status, response };
   }

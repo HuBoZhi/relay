@@ -5,7 +5,7 @@ import { ZCodeDesktop } from './native-clients.mjs';
 
 // CDP is the external boundary. Emulate changed bundle and minified names,
 // including Chrome's error-object response when an obsolete import fails.
-function renderer({ importError = false, registry = true, source = 'import { renamed } from "./styles-current.js";' } = {}) {
+function renderer({ importError = false, registry = true, source = 'import { renamed } from "./styles-current.js";', serviceResult } = {}) {
   return {
     imports: [], calls: [],
     async evaluate(expression) {
@@ -33,7 +33,11 @@ function renderer({ importError = false, registry = true, source = 'import { ren
         ] };
       }
       if (method === 'Runtime.callFunctionOn') {
-        if (params.arguments?.length) { this.calls.push(params.arguments.map(x => x.value)); return { result: { value: { status: 'idle' } } }; }
+        if (params.arguments?.length) {
+          const args = params.arguments.map(x => x.value);
+          this.calls.push(args);
+          return { result: { value: serviceResult ? serviceResult(...args) : { status: 'idle' } } };
+        }
         return { result: { value: registry && params.objectId === 'store' } };
       }
       throw Error(`Unexpected CDP request: ${method} ${params.objectId}`);
@@ -49,6 +53,25 @@ test('reads the existing desktop service after bundle, export and store names ch
   assert.deepEqual(transport.calls, [['zcodeAgentService', 'readSession', { sessionId: 'existing' }]]);
 });
 
+test('creates a task in its existing desktop project using that project root and execution mode', async () => {
+  const root = 'G:\\Coding\\Gitee\\MediaDock';
+  const transport = renderer({ serviceResult: (service, method) => {
+    if (method === 'readProjects') return [{ id: 'project-media', hostId: 'local', roots: [{ rootPath: root }] }];
+    if (method === 'createTask') return { taskId: 'new-task' };
+    if (method === 'moveTask') return undefined;
+    throw Error('Unexpected service call: ' + method);
+  } });
+  const desktop = new ZCodeDesktop(transport, null, { workspace: 'G:/Coding/Gitee/MediaDock' });
+  assert.equal((await desktop.createSession()).sessionId, 'new-task');
+  const create = transport.calls.find(c => c[1] === 'createTask')[2];
+  assert.equal(create.workspacePath, root);
+  assert.equal(create.mode, 'build');
+  const move = transport.calls.find(c => c[1] === 'moveTask')[2];
+  assert.equal(move.projectId, 'project-media');
+  assert.equal(move.task.workspacePath, root);
+  assert.equal(move.addMissingRoot, undefined);
+});
+
 test('reports a failed import before trying to inspect an error as a function', async () => {
   await assert.rejects(new ZCodeDesktop(renderer({ importError: true })).initialize(), /service module unavailable/);
 });
@@ -62,4 +85,30 @@ test('rejects ambiguous current service modules before importing or submitting a
   await assert.rejects(new ZCodeDesktop(transport).initialize(), /Unsupported ZCode service module/);
   assert.equal(transport.imports.length, 0);
   assert.equal(transport.calls.length, 0);
+});
+
+function turnSnapshot({ pending = [], interrupted = false } = {}) {
+  return {
+    session: { status: interrupted ? 'idle' : 'running', title: 'User task name' },
+    runtime: { pendingRequestIds: pending },
+    messages: [
+      { info: { messageId: 'user', metadata: { inputIntent: { sourceCommandId: 'request' } } } },
+      { info: { messageId: 'answer', parentMessageId: 'user', role: 'assistant' }, parts: [{ type: 'text', text: 'Here is my plan' }] },
+      ...(interrupted ? [{ info: { messageId: 'interrupt', metadata: { runtimeMessage: { source: 'interrupt_marker' } } } }] : []),
+    ],
+  };
+}
+
+test('surfaces pending confirmation instead of claiming active development', async () => {
+  const desktop = new ZCodeDesktop(renderer({ serviceResult: () => turnSnapshot({ pending: ['perm_approval'] }) }));
+  const result = await desktop.poll('task', 'request');
+  assert.equal(result.status, 'error');
+  assert.equal(result.error.code, 'desktop_confirmation_required');
+});
+
+test('does not report a plan followed by interruption as completed or replace its title', async () => {
+  const transport = renderer({ serviceResult: () => turnSnapshot({ interrupted: true }) });
+  const result = await new ZCodeDesktop(transport).poll('task', 'request');
+  assert.equal(result.status, 'cancelled');
+  assert.ok(transport.calls.every(c => c[1] !== 'renameTask'));
 });
