@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased - Minor]
 
+### Fixed
+
+- Desktop Relay discovers ZCode's current service bundle and connected services after client updates, and reports module import failures accurately.
+
 ### Added
 
 - `Invoke-CodexMailbox.ps1`: register a Relay inbox for an existing Codex desktop chat so other agents can address it by thread ID and Codex can actively read incoming messages.
