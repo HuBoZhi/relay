@@ -639,7 +639,46 @@ function renderDesktopSettings() {
         <span class="hint-text" id="settings-note">${state.desktop.packaged ? '' : '开发模式不会写入开机启动项'}</span>
       </div>
     </form>
+    <div class="bridge-block">
+      <div class="card-head" style="margin:12px 0 8px">
+        <h3 style="margin:0;font-size:13px">派发桥接</h3>
+        <span class="hint">把 @ 派活交给本机客户端；未注册时任务停在已排队</span>
+      </div>
+      ${renderBridges(settings.bridges || [])}
+    </div>
   </div>`;
+}
+
+function renderBridges(bridges) {
+  const rows = bridges.length
+    ? bridges
+        .map(
+          (bridge, index) => `<div class="bridge-row">
+            <strong>${esc(bridge.client)}</strong>
+            <span class="mono">${esc(bridge.url)}</span>
+            <button type="button" class="link-button" data-remove-bridge="${index}">移除</button>
+          </div>`
+        )
+        .join('')
+    : '<p class="hint-text">尚未注册桥接。群聊可以照常发言，但派活会停在「已排队」。</p>';
+  return `${rows}
+    <div class="form-row" style="margin-top:10px">
+      <div class="field">
+        <label for="bridge-client">客户端</label>
+        <select id="bridge-client">
+          ${CLIENTS.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="min-width:280px">
+        <label for="bridge-url">桥接地址</label>
+        <input id="bridge-url" placeholder="http://127.0.0.1:7901" />
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="button-ghost" type="button" id="add-bridge">添加桥接</button>
+      </div>
+    </div>
+    <p class="hint-text">只接受回环地址；添加后重启应用生效。桥接用法见 packages/dispatch-bridge/README.md。</p>`;
 }
 
 /* ---------------------------------------------------------------- dispatch */
@@ -935,6 +974,18 @@ function payloadFromDraft(draft) {
   };
 }
 
+/** Patch desktop settings and re-render, with one toast for both outcomes. */
+async function patchDesktop(patch, message) {
+  try {
+    const result = await window.relayDesktop.patchSettings(patch);
+    state.desktop = result;
+    toast(result.restartRequired ? `${message}（重启后生效）` : message);
+    render();
+  } catch (error) {
+    toast(error.message || '保存设置失败', 'bad');
+  }
+}
+
 async function submitTask(form) {
   const draft = readForm(form);
   state.issues = [];
@@ -1018,6 +1069,27 @@ function wire(root) {
       } catch (error) {
         toast(error.message || '保存设置失败', 'bad');
       }
+    };
+  }
+
+  $$('[data-remove-bridge]', root).forEach((button) => {
+    button.onclick = async () => {
+      const settings = (state.desktop?.settings?.bridges || []).slice();
+      settings.splice(Number(button.dataset.removeBridge), 1);
+      await patchDesktop({ bridges: settings }, '桥接已移除');
+    };
+  });
+  const addBridge = $('#add-bridge', root);
+  if (addBridge) {
+    addBridge.onclick = async () => {
+      const client = $('#bridge-client').value;
+      const url = String($('#bridge-url').value || '').trim();
+      if (!/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(url)) {
+        toast('桥接地址必须是本机回环地址，例如 http://127.0.0.1:7901', 'bad');
+        return;
+      }
+      const bridges = [...(state.desktop?.settings?.bridges || []), { client, url }];
+      await patchDesktop({ bridges }, '桥接已添加，重启应用后生效');
     };
   }
 

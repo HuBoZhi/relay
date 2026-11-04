@@ -749,6 +749,52 @@ table.grid tbody tr:hover {
   overflow-wrap: anywhere;
 }
 
+.bridge-block {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+.bridge-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1b2530;
+  font-size: 12px;
+}
+
+.bridge-row .mono {
+  color: var(--muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bridge-block {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+.bridge-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1b2530;
+  font-size: 12px;
+}
+
+.bridge-row .mono {
+  color: var(--muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------- misc */
 
 .empty {
