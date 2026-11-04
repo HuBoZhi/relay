@@ -101,6 +101,7 @@ const state = {
   draft: null,
   issues: [],
   loading: false,
+  desktop: null,
 };
 
 /* ------------------------------------------------------------------ helpers */
@@ -576,6 +577,7 @@ function renderClients() {
 function renderSettings() {
   const summary = state.summary;
   return `
+    ${renderDesktopSettings()}
     <div class="card">
       <div class="card-head"><h2>数据与运行</h2></div>
       <dl class="stage" style="border:0;padding:0;background:transparent">
@@ -605,6 +607,39 @@ function renderSettings() {
         派发接口返回 202 即表示已受理并持久化；发送方据此结束本轮，不等待模型，也不轮询。
       </p>
     </div>`;
+}
+
+/**
+ * Desktop settings, only when hosted by the shell.
+ *
+ * The browser page cannot change how the app starts or where it stores tasks;
+ * pretending otherwise would be a setting that silently does nothing.
+ */
+function renderDesktopSettings() {
+  if (!state.desktop) return '';
+  const settings = state.desktop.settings || {};
+  return `<div class="card">
+    <div class="card-head">
+      <h2>桌面应用设置</h2>
+      <span class="hint">关闭窗口默认退出应用；缩小到托盘需要显式开启</span>
+    </div>
+    <form class="form-grid" id="desktop-settings">
+      <div class="form-row">
+        <label class="checkbox"><input type="checkbox" name="closeToTray"${settings.closeToTray ? ' checked' : ''} /> 关闭窗口时缩小到托盘</label>
+        <label class="checkbox"><input type="checkbox" name="notifications"${settings.notifications ? ' checked' : ''} /> 桌面通知（完成、阻塞、回传需人工）</label>
+        <label class="checkbox"><input type="checkbox" name="loginAtStartup"${settings.loginAtStartup ? ' checked' : ''} /> 开机自动启动</label>
+      </div>
+      <div class="field">
+        <label for="f-data-root">任务数据目录</label>
+        <input id="f-data-root" name="dataRoot" value="${esc(settings.dataRoot || '')}" placeholder="留空则自动选择非系统盘" />
+        <span class="hint-text">当前生效：<span class="mono">${esc(state.desktop.effectiveDataRoot || '未知')}</span> · 修改后下次启动生效</span>
+      </div>
+      <div class="form-actions">
+        <button class="button-primary" type="submit">保存设置</button>
+        <span class="hint-text" id="settings-note">${state.desktop.packaged ? '' : '开发模式不会写入开机启动项'}</span>
+      </div>
+    </form>
+  </div>`;
 }
 
 /* ---------------------------------------------------------------- dispatch */
@@ -964,6 +999,28 @@ function wire(root) {
     };
   });
 
+  const settingsForm = $('#desktop-settings', root);
+  if (settingsForm) {
+    settingsForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const data = new FormData(settingsForm);
+      try {
+        const result = await window.relayDesktop.patchSettings({
+          closeToTray: data.get('closeToTray') === 'on',
+          notifications: data.get('notifications') === 'on',
+          loginAtStartup: data.get('loginAtStartup') === 'on',
+          dataRoot: String(data.get('dataRoot') || ''),
+        });
+        state.desktop = result;
+        toast('设置已保存');
+        if (result.restartRequired) toast('数据目录将在下次启动生效');
+        render();
+      } catch (error) {
+        toast(error.message || '保存设置失败', 'bad');
+      }
+    };
+  }
+
   const form = $('#dispatch-form', root);
   if (form) {
     form.onsubmit = (event) => {
@@ -1083,9 +1140,38 @@ $$('[data-nav]').forEach((button) => {
 
 $('#refresh-button').onclick = () => void refresh();
 
+async function loadDesktopSettings() {
+  if (!window.relayDesktop || typeof window.relayDesktop.settings !== 'function') {
+    state.desktop = null;
+    return;
+  }
+  try {
+    state.desktop = await window.relayDesktop.settings();
+  } catch {
+    state.desktop = null;
+  }
+}
+
+/** `#task=<id>` from a notification, `#settings` from the tray or menu. */
+async function applyHash() {
+  const hash = String(window.location.hash || '').replace(/^#/, '');
+  if (hash.startsWith('task=')) {
+    const taskId = decodeURIComponent(hash.slice(5));
+    await loadDetail(taskId);
+    setView('task', { taskId });
+    return true;
+  }
+  if (hash === 'settings') {
+    setView('settings');
+    return true;
+  }
+  return false;
+}
+
 void (async () => {
   await loadSummary();
-  if (state.view === 'overview') setView('overview');
-  else render();
+  await loadDesktopSettings();
+  const routed = await applyHash();
+  if (!routed) setView('overview');
   connectStream();
 })();

@@ -1,8 +1,28 @@
+import { mkdir, mkdtemp } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import { MENU_ACTIONS, buildAppMenu, menuActionIds } from '../lib/app-menu.mjs';
 import { DEFAULT_PORT, resolveConfig } from '../lib/config.mjs';
 import { buildTrayMenu, formatUpdatedAt, summarize, trayTooltip } from '../lib/tray-menu.mjs';
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  mergeSettings,
+  normalizeSettings,
+  saveSettings,
+  SETTINGS_VERSION,
+} from '../lib/settings.mjs';
+
+/** A real settings directory: the loader must not be the thing that creates it. */
+async function settingsFile() {
+  const dir = await mkdtemp(join(tmpdir(), 'relay-desktop-settings-'));
+  await mkdir(dir, { recursive: true });
+  return join(dir, 'settings.json');
+}
 
 const bootstrap = {
   channels: [{ name: 'a' }, { name: 'b' }],
@@ -113,8 +133,25 @@ describe('buildTrayMenu', () => {
       '数据连接：已连接 · 实时',
       '工作空间：2 个频道 · 3 个智能体',
       '今日消息：42 条',
+      '任务：未启用',
       '更新时间：10:12:37',
     ]);
+  });
+
+  it('shows task counts when the engine reported them', () => {
+    const rows = build({
+      tasks: { inFlight: 2, awaitingConfirmation: 1, callbacksManual: 0 },
+    })
+      .filter((item) => item.enabled === false)
+      .map((item) => item.label);
+    expect(rows).toContain('任务：在途 2 · 待确认 1 · 需人工 0');
+  });
+
+  it('offers task workspace and settings without Latin labels', () => {
+    const labels = build().map((item) => item.label ?? '');
+    expect(labels).toContain('打开任务工作台');
+    expect(labels).toContain('设置数据目录与启动行为');
+    expect(labels).toContain('缩小到托盘');
   });
 
   it('surfaces a failed read instead of a stale connection label', () => {
@@ -151,6 +188,17 @@ describe('trayTooltip', () => {
     expect(trayTooltip({ mode: '只读观察', status: null, error: '本地服务无响应' })).toBe(
       '协作控制中心 · 只读观察 · 本地服务无响应'
     );
+  });
+
+  it('adds the in-flight task count when the engine is mounted', () => {
+    expect(
+      trayTooltip({
+        mode: '演示数据',
+        status: summarize(bootstrap),
+        error: null,
+        tasks: { inFlight: 3 },
+      })
+    ).toBe('协作控制中心 · 演示数据 · 2 个频道 · 在途 3');
   });
 });
 
@@ -189,5 +237,52 @@ describe('buildAppMenu', () => {
 
   it('only emits actions the shell can run', () => {
     for (const id of menuActionIds(menu)) expect(MENU_ACTIONS, id).toContain(id);
+  });
+
+  it('exposes the task workspace and settings entries', () => {
+    const ids = menuActionIds(menu);
+    expect(ids).toContain('open-tasks');
+    expect(ids).toContain('open-settings');
+    expect(ids).toContain('open-observer');
+  });
+});
+
+describe('desktop settings', () => {
+  it('defaults to quitting on window close and enabling notifications', () => {
+    expect(DEFAULT_SETTINGS.closeToTray).toBe(false);
+    expect(DEFAULT_SETTINGS.notifications).toBe(true);
+    expect(DEFAULT_SETTINGS.loginAtStartup).toBe(false);
+  });
+
+  it('keeps only loopback dispatch bridges', () => {
+    const settings = normalizeSettings({
+      bridges: [
+        { client: 'zcode', url: 'http://127.0.0.1:7900' },
+        { client: 'workbuddy', url: 'http://10.0.0.5:7900' },
+        { client: '', url: 'http://127.0.0.1:7901' },
+      ],
+    });
+    expect(settings.bridges).toEqual([{ client: 'zcode', url: 'http://127.0.0.1:7900' }]);
+  });
+
+  it('survives a missing or corrupt file instead of blocking startup', async () => {
+    const path = await settingsFile();
+    expect(await loadSettings(path)).toMatchObject({ closeToTray: false, notifications: true });
+    await writeFile(path, '{ not json', 'utf8');
+    expect(await loadSettings(path)).toMatchObject({ version: SETTINGS_VERSION });
+  });
+
+  it('round-trips a saved patch and ignores unknown keys', async () => {
+    const path = await settingsFile();
+    const merged = mergeSettings(DEFAULT_SETTINGS, {
+      closeToTray: true,
+      dataRoot: 'D:\\RelayData\\async',
+      mystery: 'ignored',
+    });
+    await saveSettings(path, merged);
+    const loaded = await loadSettings(path);
+    expect(loaded.closeToTray).toBe(true);
+    expect(loaded.dataRoot).toBe('D:\\RelayData\\async');
+    expect(loaded).not.toHaveProperty('mystery');
   });
 });

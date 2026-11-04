@@ -22,12 +22,22 @@ async function loadServer() {
 }
 
 /**
+ * The bundled server module, exported for the shell.
+ *
+ * The desktop main process needs the same `AsyncEngine` class the server mounts;
+ * importing it from the bundle is what keeps one copy of the engine in the app.
+ */
+export async function loadServerModule() {
+  return loadServer();
+}
+
+/**
  * Bind the first free port from `preferred` upward.
  *
  * A second launch (or another app squatting on 4320) must not leave the user
  * with a dead tray icon, so a busy port moves on instead of failing.
  */
-export async function startRoom({ config, log = () => {} }) {
+export async function startRoom({ config, engine = null, log = () => {} }) {
   const server = await loadServer();
 
   const source = config.demo
@@ -49,6 +59,9 @@ export async function startRoom({ config, log = () => {} }) {
         port,
         host: config.host,
         webRoot: join(DIST_ROOT, 'web'),
+        // The task engine is hosted by this process, on this port, so the window
+        // and the API share one origin and one lifecycle.
+        ...(engine ? { async: { engine } } : {}),
         log,
       });
     } catch (error) {
@@ -82,6 +95,31 @@ export async function startRoom({ config, log = () => {} }) {
       await source.close().catch(() => {});
     },
   };
+}
+
+/**
+ * Task counts for the tray, read from the same local origin.
+ *
+ * Returns `null` when the engine is not mounted (a read-only install) so the tray
+ * can say '未启用' instead of showing three zeros.
+ */
+export async function probeTasks(url, { timeoutMs = 3000 } = {}) {
+  if (!url) return null;
+  try {
+    const response = await fetch(`${url}/api/async/summary`, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok) return null;
+    const snapshot = await response.json();
+    const counts = snapshot?.counts;
+    if (!counts) return null;
+    return {
+      inFlight: counts.inFlight ?? null,
+      awaitingConfirmation: counts.awaitingConfirmation ?? null,
+      callbacksManual: counts.callbacksManual ?? null,
+      tasks: counts.tasks ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -64,6 +64,7 @@ export function buildTrayMenu({
   updatedAt = Date.now(),
   timeZone = 'Asia/Shanghai',
   loginAtStartup = false,
+  tasks = null,
   actions = {},
 }) {
   const rows = [
@@ -80,17 +81,28 @@ export function buildTrayMenu({
       label: `今日消息：${status?.messagesToday === null || status?.messagesToday === undefined ? '未知' : `${status.messagesToday} 条`}`,
       enabled: false,
     },
+    {
+      // Task counts are shown only when the engine reported them; a missing
+      // engine is '未启用', not three zeros.
+      label: tasks
+        ? `任务：在途 ${tasks.inFlight ?? '未知'} · 待确认 ${tasks.awaitingConfirmation ?? '未知'} · 需人工 ${tasks.callbacksManual ?? '未知'}`
+        : '任务：未启用',
+      enabled: false,
+    },
     { label: `更新时间：${formatUpdatedAt(updatedAt, timeZone)}`, enabled: false },
   ];
 
   return [
     { label: '打开控制中心', click: actions.openWindow },
+    { label: '打开任务工作台', click: actions.openTasks },
+    { label: '设置数据目录与启动行为', click: actions.openSettings },
     { label: '复制访问地址', enabled: Boolean(url), click: actions.copyUrl },
     { label: '在浏览器中打开', enabled: Boolean(url), click: actions.openInBrowser },
     { type: 'separator' },
     ...rows,
     { type: 'separator' },
     { label: '刷新状态', click: actions.refresh },
+    { label: '缩小到托盘', click: actions.hideToTray },
     {
       label: '开机自动启动',
       type: 'checkbox',
@@ -103,9 +115,10 @@ export function buildTrayMenu({
 }
 
 /** One-line tray tooltip: mode plus the healthiest fact available. */
-export function trayTooltip({ mode, status, error }) {
+export function trayTooltip({ mode, status, error, tasks = null }) {
   if (error) return `协作控制中心 · ${mode} · ${error}`;
   const channels = status?.channels;
   const suffix = channels === null || channels === undefined ? '状态未知' : `${channels} 个频道`;
-  return `协作控制中心 · ${mode} · ${suffix}`;
+  const taskSuffix = tasks ? ` · 在途 ${tasks.inFlight ?? '未知'}` : '';
+  return `协作控制中心 · ${mode} · ${suffix}${taskSuffix}`;
 }

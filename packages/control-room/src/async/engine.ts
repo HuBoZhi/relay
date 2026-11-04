@@ -65,6 +65,10 @@ export interface EngineEvent {
   stageId?: string;
   callbackId?: string;
   message: string;
+  /** Set on callback events so the shell can pick a notification title. */
+  outcome?: 'completed' | 'failed' | 'blocked';
+  /** Delivery layer at the time of the event, for the same reason. */
+  delivery?: string;
 }
 
 export interface ValidationIssue {
@@ -767,6 +771,7 @@ export class AsyncEngine {
       stageId: input.stageId,
       callbackId: recorded.receipt.callbackId,
       message: recorded.duplicate ? '重复回传已忽略' : '收到回传',
+      outcome: input.outcome,
     });
 
     if (recorded.duplicate) {
@@ -961,6 +966,7 @@ export class AsyncEngine {
       stageId: callback.stageId,
       callbackId,
       message: updated.delivery.reason ?? '回传已投递',
+      delivery: updated.delivery.state,
     });
     return updated;
   }
