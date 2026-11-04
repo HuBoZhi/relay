@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/control-room`: async task engine behind `--tasks`. `POST /api/async/tasks` persists a task and returns a receipt (`queued` vs `delivered`) without waiting for a model, `POST /api/async/callbacks` records a completion, failure, or block and routes it back to the originating chat, and an authorised stage chain starts the review only after a completed callback. Transport, execution, business, and callback status are separate layers, callback replays collapse into one effective handling, and state plus an audit journal survive a restart.
+
+- `@agent-relay/control-room`: task workspace page next to the observer. Overview counts in-flight stages, pending confirmations, undelivered and manual callbacks; the dispatch form asks for topic, project, session policy, account, model, and reasoning per stage; task detail shows the real session, project, and model reported back, the callback delivery state, and a sourced timeline; the client matrix keeps unverified capabilities visible.
+
+- `@agent-relay/control-room-desktop`: the app hosts the task engine on its own port, shows in-flight, awaiting-confirmation, and manual-callback counts in the tray, notifies on stage results and on callbacks the origin chat did not receive, and edits data root, close behaviour, notifications, launch-at-login, and loopback dispatch bridges from the task workspace.
+
 - `Invoke-CodexMailbox.ps1`: register a Relay inbox for an existing Codex desktop chat so other agents can address it by thread ID and Codex can actively read incoming messages.
 
 - `@agent-relay/control-room-desktop`: the Windows Factory launcher runs through an independent hidden host and writes client logs to files, allowing the Relay startup terminal to close.
@@ -22,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Work state is derived from reduced agent session events, so an agent with no task event reports `未知` instead of `空闲`, and a channel with only recent messages reports `近期有消息` instead of `工作中`.
 
 ### Changed
+
+- `@agent-relay/control-room-desktop`: closing the window now quits the app and stops its engine, subscription, and port; "close to tray" is an explicit setting, and the tray gained "缩小到托盘" and task-workspace entries.
 
 - `@agent-relay/control-room-desktop`: the window drops the native title bar and menu. The menu (控制中心 / 视图 / 窗口 / 帮助) is drawn inside the console's top bar, the OS caption buttons are themed to match, and shortcuts (F5, F11, Ctrl+Q/W, Ctrl+0/±) still work.
 
