@@ -188,6 +188,17 @@ export class AsyncEngine {
     await this.store.close();
   }
 
+  /**
+   * Register a dispatch adapter after startup.
+   *
+   * A bridge can start later than the engine (or be pointed at a new port); the
+   * engine must be able to accept it without a restart, or every task would sit in
+   * `queued` until the app was relaunched.
+   */
+  registerAdapter(adapter: DispatchAdapter): void {
+    this.registry.register(adapter);
+  }
+
   subscribe(listener: (event: EngineEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

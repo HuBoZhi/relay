@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.
+
+- `@agent-relay/control-room`: `AsyncEngine.registerAdapter()` lets a bridge be registered after startup instead of requiring an app restart.
+
 - `@agent-relay/control-room`: group chat over topics. A group is a topic you can talk in; an `@` that names a client, a model, a reasoning level, and a project becomes a dispatched request, the receiving agent joins by reporting its session id, and its result is posted back into the same conversation and routed to the chat that asked. A plain `@` only addresses, and a request without a project is refused on that mention. `GET/POST /api/groups`, `POST /api/groups/:id/{messages,join,results}`.
 
 - `@agent-relay/control-room`: async task engine behind `--tasks`. `POST /api/async/tasks` persists a task and returns a receipt (`queued` vs `delivered`) without waiting for a model, `POST /api/async/callbacks` records a completion, failure, or block and routes it back to the originating chat, and an authorised stage chain starts the review only after a completed callback. Transport, execution, business, and callback status are separate layers, callback replays collapse into one effective handling, and state plus an audit journal survive a restart.

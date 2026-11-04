@@ -264,6 +264,34 @@ POST /api/async/callbacks
 - 桥接超时（默认 10 s）按 `failed` 记录并给出原因，不自动重试。
 - 桥接未注册的客户端，派发结果固定为 `queued`，界面如实显示「未接入」。
 
+参考实现：`packages/dispatch-bridge`（`relay-dispatch-bridge`）。
+
+- 它加载已安装的 `desktop-native` 适配器（`cdp.mjs` / `native-clients.mjs` / `factory.mjs`），
+  不复制客户端协议；适配器目录不可用时桥接照常启动，派发返回 `queued` 并写明原因。
+- `/dispatch` 只等到「提示词已被客户端接受」：创建/复用会话 → 提交 → 立即返回 `sessionId`。
+- 轮次结束由桥接自己检查（默认 2 s，可配），**这是整套系统里唯一的轮询点**，且不涉及模型。
+  结束后向 `/api/async/callbacks` 回报，`idempotencyKey = bridge:<taskId>:<stageId>:<runId>`。
+- 结果映射：`completed` → `completed`；`cancelled` → `blocked`；待确认请求（`perm_*`）→ `blocked`；
+  其他错误 → `failed`；超时**不回报**，记录为 `unconfirmed` 等人工核验，绝不重发提示词。
+- 同一客户端同时只接受一个在途请求，第二个请求返回 `queued`（附原因），不排队重放。
+- `/deliver` 固定返回 `manual`：原聊天注入尚未实现，桥接不冒充成功。
+- 数据目录（会话绑定、在途记录、回报日志）必须在非系统盘；被中断的 `submitting` 记录在重启后标记为
+  `unconfirmed`，不复发。
+
+参考实现：`packages/dispatch-bridge`（`relay-dispatch-bridge`）。
+
+- 它加载已安装的 `desktop-native` 适配器（`cdp.mjs` / `native-clients.mjs` / `factory.mjs`），
+  不复制客户端协议；适配器目录不可用时桥接照常启动，派发返回 `queued` 并写明原因。
+- `/dispatch` 只等到「提示词已被客户端接受」：创建/复用会话 → 提交 → 立即返回 `sessionId`。
+- 轮次结束由桥接自己检查（默认 2 s，可配），**这是整套系统里唯一的轮询点**，且不涉及模型。
+  结束后向 `/api/async/callbacks` 回报，`idempotencyKey = bridge:<taskId>:<stageId>:<runId>`。
+- 结果映射：`completed` → `completed`；`cancelled` → `blocked`；待确认请求（`perm_*`）→ `blocked`；
+  其他错误 → `failed`；超时**不回报**，记录为 `unconfirmed` 等人工核验，绝不重发提示词。
+- 同一客户端同时只接受一个在途请求，第二个请求返回 `queued`（附原因），不排队重放。
+- `/deliver` 固定返回 `manual`：原聊天注入尚未实现，桥接不冒充成功。
+- 数据目录（会话绑定、在途记录、回报日志）必须在非系统盘；被中断的 `submitting` 记录在重启后标记为
+  `unconfirmed`，不复发。
+
 ## 9. 客户端能力矩阵
 
 矩阵在 `packages/control-room/src/async/adapters.ts` 中以静态基线给出，运行时由探测与真实回传覆盖。
