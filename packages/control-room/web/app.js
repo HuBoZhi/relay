@@ -392,13 +392,14 @@ function renderPage() {
   $('#overview-button').setAttribute('aria-pressed', String(overview));
   $('#breadcrumb-current').textContent = overview ? '系统总览' : channel ? `# ${channel.displayName}` : '频道详情';
   $('#page-title').textContent = overview ? '协作控制中心' : channel ? `# ${channel.displayName}` : '频道详情';
-  $('#page-eyebrow').textContent = overview ? '全局态势 / 多智能体协作观察' : archivedLocally(channel) ? '本机归档主题' : '频道态势 / 参与节点与消息记录';
+  $('#page-eyebrow').textContent = overview ? '全局指挥台' : archivedLocally(channel) ? '本机归档主题' : '频道指挥台';
   $('#overview-subtitle').textContent = overview
     ? `全局频道状态、智能体任务与消息流转 · ${zoneLabel()}`
     : channel?.topic || '该频道的参与节点、工作状态与消息记录';
   $('#network-eyebrow').textContent = overview ? '全局协作网络' : '频道内部协作';
-  $('#network-title').textContent = overview ? '全局协作态势' : '频道协作态势';
-  $('.heading-index').textContent = overview ? '01' : '02';
+  $('#network-title').textContent = overview ? '频道阵列' : '节点协作';
+  const headingIndex = $('.heading-index');
+  if (headingIndex) headingIndex.textContent = overview ? '01' : '02';
   $('.heading-readout strong').textContent = state.paused ? '只读 · 已暂停' : '只读 · 持续';
   $('#network-context').textContent = overview ? '全局频道与成员关系' : '频道节点与任务状态';
   $('.graph-hint').lastChild.textContent = overview ? '选择频道，进入独立协作空间' : '选择节点，查看频道内参与者';
@@ -660,52 +661,26 @@ function renderTraffic() {
 
 /* ---------------------------------------------------------------- topology */
 
+function globalCorePosition() {
+  return ($('#graph-stage')?.clientWidth || 900) < 520 ? { x: 450, y: 220 } : { x: 180, y: 220 };
+}
+
 function layoutGlobal() {
   const channels = activeChannels();
   const count = channels.length || 1;
-  const cx = 450;
-  const cy = 220;
-  const stageWidth = $('#graph-stage')?.clientWidth || 900;
-  const mobile = stageWidth < 520;
-  const geometry = mobile
-    ? { rx: 0, viewBox: '100 0 700 440' }
-    : { rx: 300, viewBox: '0 0 900 440' };
-  const twoRings = count > 9;
-  const placed = new Map();
-
-  channels.forEach((channel, index) => {
-    let x;
-    let y;
-    if (mobile) {
-      const row = Math.floor(index / 2);
-      const rowCount = Math.ceil(count / 2);
-      const rows = rowCount === 4
-        ? [54, 135, 305, 386]
-        : Array.from({ length: rowCount }, (_, rowIndex) => 54 + (rowIndex * 332) / Math.max(rowCount - 1, 1));
-      x = index % 2 === 0 ? 250 : 650;
-      y = rows[row] ?? cy;
-    } else if (!twoRings) {
-      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count;
-      x = cx + Math.cos(angle) * geometry.rx;
-      y = cy + Math.sin(angle) * 128;
-    } else {
-      const ring = index % 2;
-      const ringCount = ring === 0 ? Math.ceil(count / 2) : Math.floor(count / 2);
-      const position = Math.floor(index / 2);
-      const angle =
-        -Math.PI / 2 + ((position + (ring === 0 ? 0 : 0.5)) * 2 * Math.PI) / Math.max(ringCount, 1);
-      const rx = ring === 0 ? geometry.rx : geometry.rx * 0.63;
-      const ry = ring === 0 ? 158 : 84;
-      x = cx + Math.cos(angle) * rx;
-      y = cy + Math.sin(angle) * ry;
-    }
-    placed.set(channel.name, { x: Math.round(x), y: Math.round(y) });
-  });
-
+  const mobile = ($('#graph-stage')?.clientWidth || 900) < 520;
+  const rowCount = Math.ceil(count / 2);
+  const rows = rowCount === 4
+    ? [58, 142, 298, 382]
+    : Array.from({ length: rowCount }, (_, index) => 58 + (index * 324) / Math.max(rowCount - 1, 1));
   return {
-    channels: channels.map((channel) => ({ channel, ...placed.get(channel.name) })),
+    channels: channels.map((channel, index) => ({
+      channel,
+      x: mobile ? (index % 2 === 0 ? 250 : 650) : (index % 2 === 0 ? 480 : 760),
+      y: rows[Math.floor(index / 2)] ?? 220,
+    })),
     agents: [],
-    viewBox: geometry.viewBox,
+    viewBox: mobile ? '100 0 700 440' : '0 0 900 440',
   };
 }
 
@@ -738,8 +713,7 @@ const GRAPH_DEFS = `<defs>
 </defs>`;
 
 function routeToChannel(x, y) {
-  const cx = 450;
-  const cy = 220;
+  const { x: cx, y: cy } = globalCorePosition();
   const dx = x - cx;
   const dy = y - cy;
   const length = Math.hypot(dx, dy) || 1;
@@ -807,7 +781,8 @@ function channelCore(channel) {
 function workspaceCore() {
   const channels = activeChannels();
   const working = channels.filter((channel) => channel.state === 'active').length;
-  return `<g class="relay-core workspace-core ${working ? 'active' : 'idle'}" transform="translate(450 220)">
+  const core = globalCorePosition();
+  return `<g class="relay-core workspace-core ${working ? 'active' : 'idle'}" transform="translate(${core.x} ${core.y})">
     <circle class="core-aura" r="126"/>
     <circle class="core-wave wave-a" r="82"/>
     <circle class="core-wave wave-b" r="82"/>
@@ -898,8 +873,15 @@ function renderGraph() {
 
   if (state.view === 'global') {
     const layout = layoutGlobal();
-    html +=
-      '<g class="global-backdrop" aria-hidden="true"><ellipse class="network-orbit" cx="450" cy="220" rx="287" ry="128"/><ellipse class="network-ring" cx="450" cy="220" rx="326" ry="158"/><ellipse class="global-scan-orbit" cx="450" cy="220" rx="326" ry="158" pathLength="100"/><path class="global-axis" d="M450 38V402M84 220H816"/><path class="global-calibration" d="M450 54V64M450 376V386M120 216V224M780 216V224"/><circle class="orbit-beacon" cx="450" cy="62" r="2"/><circle class="orbit-beacon" cx="776" cy="220" r="2"/><circle class="orbit-beacon" cx="124" cy="220" r="2"/></g>';
+    const core = globalCorePosition();
+    html += `<g class="array-backdrop" aria-hidden="true">
+      <path class="array-spine" d="M${core.x} 36V404"/>
+      <path class="array-bus" d="M${core.x} 220H860"/>
+      <path class="array-guides" d="M480 38V402M760 38V402"/>
+      <path class="array-ticks" d="M174 58H186M174 142H186M174 298H186M174 382H186"/>
+      <circle class="array-beacon" cx="${core.x}" cy="58" r="2"/><circle class="array-beacon" cx="${core.x}" cy="382" r="2"/>
+      ${core.x === 180 ? '<text class="array-label" x="480" y="24">频道序列 / 01</text><text class="array-label" x="760" y="24">频道序列 / 02</text><text class="array-core-label" x="180" y="24">工作空间核心</text>' : ''}
+    </g>`;
 
     layout.channels.forEach((entry, index) => {
       const cls = channelClass(entry.channel);
@@ -1420,9 +1402,9 @@ function renderConnection() {
 function renderLiveToggle() {
   const button = $('#live-toggle');
   button.setAttribute('aria-pressed', String(state.paused));
-  $('#live-label').textContent = state.paused ? '继续观察' : '停止观察';
+  $('#live-label').textContent = state.paused ? '继续' : '暂停';
   button.innerHTML = `<span class="tiny-dot"></span><span id="live-label">${
-    state.paused ? '继续观察' : '停止观察'
+    state.paused ? '继续' : '暂停'
   }</span>${icon(state.paused ? 'play' : 'pause')}`;
   paintIcons(button);
 }

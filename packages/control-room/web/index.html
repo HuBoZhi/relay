@@ -11,6 +11,7 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./room.css" />
+    <link rel="stylesheet" href="./command.css" />
     <link rel="stylesheet" href="./desktop.css" />
     <title>协作控制中心 · Relay</title>
   </head>
@@ -98,12 +99,11 @@
           <span data-icon="info"></span><span id="notice-bar-text"></span>
           <button class="icon-button" id="notice-dismiss" aria-label="关闭提示"><span data-icon="x"></span></button>
         </div>
-        <section class="overview-heading">
+        <section class="overview-heading command-bar">
           <div class="heading-copy">
-            <span class="heading-index" aria-hidden="true">01</span>
-            <div class="eyebrow" id="page-eyebrow">全局态势 / 多智能体协作观察</div>
+            <div class="eyebrow" id="page-eyebrow">全局态势</div>
             <h1>
-              <span id="page-title">协作控制中心</span><span class="heading-dot"></span>
+              <span id="page-title">协作控制中心</span>
               <button id="rename-channel" class="button" hidden>修改名称</button>
               <details id="theme-management" class="theme-management" hidden>
                 <summary class="button">主题管理</summary>
@@ -125,38 +125,34 @@
               <small>名称保存在本机；原频道标识不变。</small>
             </form>
           </div>
+          <section class="metrics" aria-label="系统指标">
+            <div class="metric" title="工作频道">
+              <div class="metric-label">工作频道</div>
+              <div class="metric-value"><span id="metric-channels-working">--</span><small id="metric-channels-total">/ --</small></div>
+              <div class="metric-track"><i id="metric-channels-bar" style="width: 0"></i></div>
+            </div>
+            <div class="metric" title="执行中智能体">
+              <div class="metric-label">执行节点</div>
+              <div class="metric-value"><span id="metric-agents-running">--</span><small id="metric-agents-total">/ --</small></div>
+              <p id="metric-agents-note" hidden>工作状态与在线状态分别展示</p>
+            </div>
+            <div class="metric" title="今日消息">
+              <div class="metric-label">今日消息</div>
+              <div class="metric-value"><span id="metric-messages-today">--</span></div>
+              <p id="metric-messages-note" hidden>按北京时间统计已加载频道</p>
+            </div>
+            <div class="metric metric-attention" title="待关注频道">
+              <div class="metric-label">待关注</div>
+              <div class="metric-value"><span class="amber" id="metric-attention">--</span></div>
+              <button class="metric-link" id="alert-link" hidden>查看待关注频道 <span data-icon="arrow-up-right"></span></button>
+              <p id="metric-attention-note" hidden>暂无待关注频道</p>
+            </div>
+          </section>
           <div class="heading-actions">
-            <div class="heading-readout"><span>观察模式</span><strong>只读 · 持续</strong></div>
+            <div class="heading-readout" hidden><span>观察模式</span><strong>只读 · 持续</strong></div>
             <button id="live-toggle" class="button live-button" aria-pressed="false">
-              <span class="tiny-dot"></span><span id="live-label">停止观察</span><span data-icon="pause"></span>
+              <span class="tiny-dot"></span><span id="live-label">暂停</span><span data-icon="pause"></span>
             </button>
-          </div>
-        </section>
-        <section class="metrics" aria-label="系统指标">
-          <div class="metric">
-            <span class="metric-index">01</span>
-            <div class="metric-label">工作频道<span data-icon="radio-tower"></span></div>
-            <div class="metric-value"><span id="metric-channels-working">--</span><small id="metric-channels-total">/ --</small><span class="metric-note">同时协作</span></div>
-            <div class="metric-track"><i id="metric-channels-bar" style="width: 0"></i></div>
-          </div>
-          <div class="metric">
-            <span class="metric-index">02</span>
-            <div class="metric-label">执行中智能体<span data-icon="cpu"></span></div>
-            <div class="metric-value"><span id="metric-agents-running">--</span><small id="metric-agents-total">/ --</small><span class="mini-pulse" aria-hidden="true">▂▆▃▇▅▂▅</span></div>
-            <p id="metric-agents-note">工作状态与在线状态分别展示</p>
-          </div>
-          <div class="metric">
-            <span class="metric-index">03</span>
-            <div class="metric-label">今日消息<span data-icon="messages-square"></span></div>
-            <div class="metric-value"><span id="metric-messages-today">--</span><span class="metric-note">条</span></div>
-            <p id="metric-messages-note">按北京时间统计已加载频道</p>
-          </div>
-          <div class="metric metric-attention">
-            <span class="metric-index">04</span>
-            <div class="metric-label">待关注<span data-icon="triangle-alert"></span></div>
-            <div class="metric-value"><span class="amber" id="metric-attention">--</span><span class="metric-note">个频道</span></div>
-            <button class="metric-link" id="alert-link" hidden>查看待关注频道 <span data-icon="arrow-up-right"></span></button>
-            <p id="metric-attention-note" hidden>暂无待关注频道</p>
           </div>
         </section>
         <div class="workbench">

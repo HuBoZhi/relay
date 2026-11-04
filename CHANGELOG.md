@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@agent-relay/control-room`: redesign the observatory around a cinematic channel topology, live throughput trace, and event rail, with pointer-reactive surfaces, responsive channel layouts, and reduced-motion support.
 
+- `@agent-relay/control-room`: replace the oversized heading and metric-card band with a full-height command deck, inline system readouts, and a core-to-channel array that gives the live workspace priority.
+
 ### Removed
 
 - Python workflows, the `agent-relay.py` node provider, and the `agent-relay-sdk` package. Local workflows are YAML, TypeScript, JavaScript, or shell. Cloud and worker workflows are YAML or TypeScript. Node definitions are TypeScript or JavaScript. SDKs are TypeScript and Swift.
