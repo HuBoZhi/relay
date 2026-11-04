@@ -392,12 +392,15 @@ function renderPage() {
   $('#overview-button').setAttribute('aria-pressed', String(overview));
   $('#breadcrumb-current').textContent = overview ? '系统总览' : channel ? `# ${channel.displayName}` : '频道详情';
   $('#page-title').textContent = overview ? '协作控制中心' : channel ? `# ${channel.displayName}` : '频道详情';
-  $('#page-eyebrow').textContent = overview ? '多智能体协作观察' : archivedLocally(channel) ? '本机归档主题' : '频道协作空间';
+  $('#page-eyebrow').textContent = overview ? '全局态势 / 多智能体协作观察' : archivedLocally(channel) ? '本机归档主题' : '频道态势 / 参与节点与消息记录';
   $('#overview-subtitle').textContent = overview
     ? `全局频道状态、智能体任务与消息流转 · ${zoneLabel()}`
     : channel?.topic || '该频道的参与节点、工作状态与消息记录';
   $('#network-eyebrow').textContent = overview ? '全局协作网络' : '频道内部协作';
-  $('#network-title').textContent = overview ? '系统数据流转' : '频道数据流转';
+  $('#network-title').textContent = overview ? '全局协作态势' : '频道协作态势';
+  $('.heading-index').textContent = overview ? '01' : '02';
+  $('.heading-readout strong').textContent = state.paused ? '只读 · 已暂停' : '只读 · 持续';
+  $('#network-context').textContent = overview ? '全局频道与成员关系' : '频道节点与任务状态';
   $('.graph-hint').lastChild.textContent = overview ? '选择频道，进入独立协作空间' : '选择节点，查看频道内参与者';
   $$('[data-view]').forEach((button) => {
     const active = button.dataset.view === state.view;
@@ -543,17 +546,34 @@ function selectChannel(name, agent = null) {
 
 /* ----------------------------------------------------------------- metrics */
 
+function metricText(selector, value) {
+  const element = $(selector);
+  const next = String(value);
+  if (element.textContent === next) return;
+  element.textContent = next;
+  if (element.dataset.ready === 'true' && !reduced.matches && typeof element.animate === 'function') {
+    element.animate(
+      [
+        { opacity: 0.25, transform: 'translateY(0.32em)', filter: 'blur(2px)' },
+        { opacity: 1, transform: 'translateY(0)', filter: 'blur(0)' },
+      ],
+      { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    );
+  }
+  element.dataset.ready = 'true';
+}
+
 function renderMetrics() {
   const metrics = state.metrics;
   if (!metrics) return;
   const working = metrics.channelsWorking;
-  $('#metric-channels-working').textContent = working === null ? '--' : String(working).padStart(2, '0');
+  metricText('#metric-channels-working', working === null ? '--' : String(working).padStart(2, '0'));
   $('#metric-channels-total').textContent = `/ ${String(metrics.channelsTotal).padStart(2, '0')}`;
   const ratio = working === null || metrics.channelsTotal === 0 ? 0 : (working / metrics.channelsTotal) * 100;
   $('#metric-channels-bar').style.width = `${Math.round(ratio)}%`;
 
   const running = metrics.agentsRunning;
-  $('#metric-agents-running').textContent = running === null ? '--' : String(running);
+  metricText('#metric-agents-running', running === null ? '--' : String(running));
   $('#metric-agents-total').textContent = `/ ${metrics.agentsTotal}`;
   $('#metric-agents-note').textContent =
     running === null
@@ -561,8 +581,10 @@ function renderMetrics() {
       : `在线 ${metrics.agentsOnline === null ? '未知' : metrics.agentsOnline} 个 · 工作与在线状态分别展示`;
 
   const today = metrics.messagesToday;
-  $('#metric-messages-today').textContent =
-    today === null ? '--' : `${today.toLocaleString('zh-CN')}${metrics.messagesTodayPartial ? '+' : ''}`;
+  metricText(
+    '#metric-messages-today',
+    today === null ? '--' : `${today.toLocaleString('zh-CN')}${metrics.messagesTodayPartial ? '+' : ''}`
+  );
   $('#metric-messages-note').textContent =
     today === null
       ? '暂无数据'
@@ -571,7 +593,7 @@ function renderMetrics() {
         : `按${zoneLabel()}统计已加载频道`;
 
   const attention = metrics.channelsAttention;
-  $('#metric-attention').textContent = attention === null ? '--' : String(attention).padStart(2, '0');
+  metricText('#metric-attention', attention === null ? '--' : String(attention).padStart(2, '0'));
   const attentionChannel = activeChannels().find((channel) => channel.state === 'attention');
   const link = $('#alert-link');
   const note = $('#metric-attention-note');
@@ -602,7 +624,7 @@ function renderTraffic() {
   }
   const points = throughput.points;
   const peak = Math.max(...points.map((point) => point.count), 1);
-  chart.innerHTML = points
+  const bars = points
     .map((point) => {
       const height = Math.round((point.count / peak) * 100);
       const parts = stamp(point.at);
@@ -614,13 +636,22 @@ function renderTraffic() {
       }：${point.count} 条"></i>`;
     })
     .join('');
+  const coordinates = points.map((point, index) => {
+    const x = points.length === 1 ? 160 : (index / (points.length - 1)) * 320;
+    const y = 78 - (point.count / peak) * 62;
+    return { x, y };
+  });
+  const line = coordinates.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  const area = `${line} L320,84 L0,84 Z`;
+  const lastPoint = coordinates[coordinates.length - 1];
+  chart.innerHTML = `<div class="traffic-bars">${bars}</div><svg class="traffic-line-chart" viewBox="0 0 320 88" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="traffic-area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#68e4ff" stop-opacity=".24"/><stop offset="1" stop-color="#68e4ff" stop-opacity="0"/></linearGradient></defs><path class="traffic-grid-line" d="M0 22H320M0 50H320M0 78H320"/><path class="traffic-area" d="${area}"/><path class="traffic-line" d="${line}" pathLength="1"/><circle class="traffic-point" cx="${lastPoint.x}" cy="${lastPoint.y}" r="3"/></svg>`;
   const labels = points.filter((_, index) => index % Math.max(1, Math.floor(points.length / 4)) === 0);
   axis.innerHTML = labels
     .map((point) => `<span>${(stamp(point.at) || {}).minute || '--:--'}</span>`)
     .join('');
   $('#traffic-window').textContent = `最近 ${throughput.windowMinutes} 分钟 · 本机观察`;
   const last = points[points.length - 1];
-  $('#traffic-rate').textContent = String(last ? last.count : 0);
+  metricText('#traffic-rate', String(last ? last.count : 0));
   chart.setAttribute(
     'aria-label',
     `消息吞吐趋势：最近 ${throughput.windowMinutes} 分钟，共 ${throughput.total} 条，峰值每分钟 ${peak} 条。`
@@ -634,15 +665,28 @@ function layoutGlobal() {
   const count = channels.length || 1;
   const cx = 450;
   const cy = 220;
+  const stageWidth = $('#graph-stage')?.clientWidth || 900;
+  const mobile = stageWidth < 520;
+  const geometry = mobile
+    ? { rx: 0, viewBox: '100 0 700 440' }
+    : { rx: 300, viewBox: '0 0 900 440' };
   const twoRings = count > 9;
   const placed = new Map();
 
   channels.forEach((channel, index) => {
     let x;
     let y;
-    if (!twoRings) {
+    if (mobile) {
+      const row = Math.floor(index / 2);
+      const rowCount = Math.ceil(count / 2);
+      const rows = rowCount === 4
+        ? [54, 135, 305, 386]
+        : Array.from({ length: rowCount }, (_, rowIndex) => 54 + (rowIndex * 332) / Math.max(rowCount - 1, 1));
+      x = index % 2 === 0 ? 250 : 650;
+      y = rows[row] ?? cy;
+    } else if (!twoRings) {
       const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count;
-      x = cx + Math.cos(angle) * 300;
+      x = cx + Math.cos(angle) * geometry.rx;
       y = cy + Math.sin(angle) * 128;
     } else {
       const ring = index % 2;
@@ -650,7 +694,7 @@ function layoutGlobal() {
       const position = Math.floor(index / 2);
       const angle =
         -Math.PI / 2 + ((position + (ring === 0 ? 0 : 0.5)) * 2 * Math.PI) / Math.max(ringCount, 1);
-      const rx = ring === 0 ? 330 : 190;
+      const rx = ring === 0 ? geometry.rx : geometry.rx * 0.63;
       const ry = ring === 0 ? 158 : 84;
       x = cx + Math.cos(angle) * rx;
       y = cy + Math.sin(angle) * ry;
@@ -661,6 +705,7 @@ function layoutGlobal() {
   return {
     channels: channels.map((channel) => ({ channel, ...placed.get(channel.name) })),
     agents: [],
+    viewBox: geometry.viewBox,
   };
 }
 
@@ -675,12 +720,22 @@ function layoutFocus(channel) {
       agent,
       channel,
       x: Math.round(cx + Math.cos(angle) * radius),
-      y: Math.round(cy + Math.sin(angle) * radius * 0.78),
+      y: Math.round(cy + Math.sin(angle) * radius * 0.62),
     };
   });
 }
 
-const GRAPH_DEFS = `<defs><filter id="small-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="#6dbab4" stroke-width="1.3"/></marker><marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="#d2a46c" stroke-width="1.3"/></marker></defs>`;
+const GRAPH_DEFS = `<defs>
+  <filter id="small-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="core-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="3.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="selected-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <radialGradient id="core-aura"><stop offset="0" stop-color="#63dfff" stop-opacity=".18"/><stop offset=".55" stop-color="#3188c9" stop-opacity=".055"/><stop offset="1" stop-color="#3188c9" stop-opacity="0"/></radialGradient>
+  <radialGradient id="core-fill" cx="36%" cy="27%"><stop offset="0" stop-color="#173e59"/><stop offset=".52" stop-color="#0d263c"/><stop offset="1" stop-color="#081522"/></radialGradient>
+  <radialGradient id="node-fill" cx="35%" cy="28%"><stop offset="0" stop-color="#1a3d55"/><stop offset="1" stop-color="#0a1a29"/></radialGradient>
+  <linearGradient id="channel-surface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#13283a"/><stop offset=".55" stop-color="#0c1b2a"/><stop offset="1" stop-color="#09131f"/></linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="#74ccec" stroke-width="1.3"/></marker>
+  <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="#e8ad68" stroke-width="1.3"/></marker>
+</defs>`;
 
 function routeToChannel(x, y) {
   const cx = 450;
@@ -698,8 +753,79 @@ function routeToChannel(x, y) {
   return `M ${sx} ${sy} C ${sx + (ex - sx) * 0.55} ${sy} ${ex - (ex - sx) * 0.4} ${ey} ${ex} ${ey}`;
 }
 
+function routeToAgent(entry) {
+  const cx = 450;
+  const cy = 300;
+  const dx = entry.x - cx;
+  const dy = entry.y - cy;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length;
+  const uy = dy / length;
+  const sx = cx + ux * 82;
+  const sy = cy + uy * 82;
+  const ex = entry.x - ux * 29;
+  const ey = entry.y - uy * 29;
+  const direction = dx >= 0 ? 1 : -1;
+  const bend = Math.min(28, length * 0.12) * direction;
+  const qx = (sx + ex) / 2 - uy * bend;
+  const qy = (sy + ey) / 2 + ux * bend;
+  return `M ${sx} ${sy} Q ${qx} ${qy} ${ex} ${ey}`;
+}
+
+function focusBackdrop(channel) {
+  return `<g class="focus-backdrop" aria-hidden="true">
+    <ellipse class="network-ring focus-ring-outer" cx="450" cy="300" rx="326" ry="245"/>
+    <ellipse class="network-orbit focus-ring-inner" cx="450" cy="300" rx="274" ry="202"/>
+    <ellipse class="focus-orbit-flow" cx="450" cy="300" rx="274" ry="202" pathLength="100"/>
+    <path class="focus-axis" d="M 450 48 V 552 M 105 300 H 795"/>
+    <path class="focus-corners" d="M 122 172 V 128 H 166 M 734 128 H 778 V 172 M 122 428 V 472 H 166 M 734 472 H 778 V 428"/>
+    <g class="focus-orbit-nodes"><circle cx="450" cy="98" r="2"/><circle cx="724" cy="300" r="2"/><circle cx="450" cy="502" r="2"/><circle cx="176" cy="300" r="2"/></g>
+    <text class="focus-kicker" x="450" y="34">频道协作网络 / ${esc(channel.displayName)}</text>
+    <text class="focus-caption" x="450" y="54">节点状态与消息事件实时映射</text>
+  </g>`;
+}
+
+function channelCore(channel) {
+  const cls = channelClass(channel);
+  const name = channel.displayName.length > 10 ? `${channel.displayName.slice(0, 9)}…` : channel.displayName;
+  return `<g class="channel-core ${cls}" transform="translate(450 300)">
+    <circle class="core-aura" r="122"/>
+    <circle class="core-wave wave-a" r="79"/>
+    <circle class="core-wave wave-b" r="79"/>
+    <g class="core-rotor"><circle class="core-rotor-track" r="97" pathLength="100"/><circle class="core-rotor-dot" cx="0" cy="-97" r="3"/></g>
+    <circle class="core-orbit-inner" r="84"/>
+    <circle class="core-ring-dashed" r="73" pathLength="100"/>
+    <circle class="core-shell" r="62"/>
+    <circle class="core-shell-line" r="55"/>
+    <g class="core-symbol" transform="translate(0 -29)" aria-hidden="true"><path d="M -13 4 L 0 -5 L 13 4 M 0 -5 V 11"/><circle cx="-13" cy="4" r="3"/><circle cx="13" cy="4" r="3"/><circle class="core-symbol-main" cx="0" cy="-5" r="4"/><circle cx="0" cy="11" r="2.5"/></g>
+    <text class="channel-core-name" y="14"># ${esc(name)}</text>
+    <text class="channel-core-meta" y="34">${esc(channel.stateLabel)} · ${channel.memberCount} 个节点</text>
+    <g class="core-bars" transform="translate(-15 44)" aria-hidden="true"><rect x="0" y="-5" width="3" height="5" rx="1"/><rect x="6" y="-9" width="3" height="9" rx="1"/><rect x="12" y="-6" width="3" height="6" rx="1"/><rect x="18" y="-12" width="3" height="12" rx="1"/><rect x="24" y="-7" width="3" height="7" rx="1"/></g>
+  </g>`;
+}
+
+function workspaceCore() {
+  const channels = activeChannels();
+  const working = channels.filter((channel) => channel.state === 'active').length;
+  return `<g class="relay-core workspace-core ${working ? 'active' : 'idle'}" transform="translate(450 220)">
+    <circle class="core-aura" r="126"/>
+    <circle class="core-wave wave-a" r="82"/>
+    <circle class="core-wave wave-b" r="82"/>
+    <g class="core-rotor"><circle class="core-rotor-track" r="91" pathLength="100"/><circle class="core-rotor-dot" cx="0" cy="-91" r="2.5"/></g>
+    <circle class="core-orbit-inner" r="79"/>
+    <circle class="core-ring-dashed" r="69" pathLength="100"/>
+    <path class="core-calibration" d="M-4-105H4M0-105V-97M-4 105H4M0 105V97M-105-4V4M-105 0H-97M105-4V4M105 0H97"/>
+    <circle class="core-shell" r="59"/>
+    <circle class="core-shell-line" r="52"/>
+    <text class="core-kicker" y="-25">全域协作</text>
+    <text class="core-label" y="2">协作中枢</text>
+    <text class="core-subtitle" y="24">${String(working).padStart(2, '0')} / ${String(channels.length).padStart(2, '0')} 频道活跃</text>
+    <g class="core-bars" transform="translate(-12 37)" aria-hidden="true"><rect x="0" y="-4" width="2" height="4"/><rect x="5" y="-8" width="2" height="8"/><rect x="10" y="-5" width="2" height="5"/><rect x="15" y="-10" width="2" height="10"/><rect x="20" y="-6" width="2" height="6"/></g>
+  </g>`;
+}
+
 const packet = (id, duration, delay, warning = false) =>
-  `<circle class="packet ${warning ? 'warning' : ''}" r="2.3"><animateMotion dur="${duration}s" begin="-${delay}s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></circle>`;
+  `<g class="packet ${warning ? 'warning' : ''}"><circle r="7" opacity=".13"/><circle r="3.1"/><circle r="1.1" fill="#efffff"/><animateMotion dur="${duration}s" begin="-${delay}s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></g>`;
 
 function channelNode(entry, index) {
   const { channel, x, y } = entry;
@@ -712,38 +838,51 @@ function channelNode(entry, index) {
     channel.displayName
   )}，${esc(channel.stateLabel)}" aria-pressed="${selected}" transform="translate(${x} ${y})"><title>#${esc(
     channel.displayName
-  )} · ${esc(channel.stateLabel)} · ${esc(channel.stateReason)}</title><rect class="channel-shape" x="-104" y="-32" width="208" height="64" rx="9"/><text x="-88" y="-7" class="channel-name"># ${esc(
+  )} · ${esc(channel.stateLabel  )} · ${esc(channel.stateReason)}</title><rect class="channel-shape" x="-104" y="-32" width="208" height="64" rx="3"/><path class="channel-corners" d="M-104-20V-32H-92M92-32H104V-20M104 20V32H92M-92 32H-104V20"/><path class="channel-status-line" d="M-88-23H-58"/><text x="-88" y="-5" class="channel-name"># ${esc(
     channel.displayName.length > 15 ? `${channel.displayName.slice(0, 14)}…` : channel.displayName
   )}</text><text x="-88" y="17" class="channel-caption">${esc(channel.stateLabel)} · ${
     channel.memberCount
-  } 个节点</text><circle cx="89" cy="-17" r="2.5" fill="${
-    cls === 'warning' ? '#deb375' : cls === 'active' ? '#7ce7d5' : '#667985'
-  }"/><text x="83" y="17" class="channel-number">${String(index + 1).padStart(2, '0')}</text></g>`;
+  } 个节点</text><circle class="channel-state-light" cx="88" cy="-17" r="2.5"/><text x="78" y="17" class="channel-number">${String(index + 1).padStart(2, '0')}</text><g class="channel-ticks" aria-hidden="true"><path d="M-98-26V-22M-94-26V-24M-90-26V-22M90 22V26M94 24V26M98 22V26"/></g></g>`;
 }
 
-function agentNode(entry, focus = false) {
+function agentNode(entry, focus = false, index = 0) {
   const { agent, channel, x, y } = entry;
   const cls = agentClass(agent);
   const selected = state.agent === agent.name;
+  const verticalLabels = focus && Math.abs(x - 450) < 50;
+  const labelsAbove = focus && !verticalLabels && y < 300;
+  const labelY = verticalLabels ? -13 : labelsAbove ? -47 : focus ? 47 : 25;
+  const taskY = verticalLabels ? 7 : labelsAbove ? -67 : 67;
+  const statusY = verticalLabels ? 27 : labelsAbove ? -85 : 85;
+  const labelAnchor = verticalLabels ? 'x="38" text-anchor="start"' : 'text-anchor="middle"';
   const hitArea = focus
-    ? '<rect class="node-hit-target" x="-88" y="-28" width="176" height="126" fill="transparent"/>'
+    ? verticalLabels
+      ? '<rect class="node-hit-target" x="-30" y="-38" width="230" height="82" fill="transparent"/>'
+      : `<rect class="node-hit-target" x="-92" y="${labelsAbove ? -101 : -34}" width="184" height="137" fill="transparent"/>`
     : '';
   const label = focus ? 'focus-node-label' : 'node-label';
+  const animated = cls === 'active' || cls === 'warning';
   return `<g class="agent-node ${cls} ${selected ? 'selected' : ''}" data-graph-agent="${esc(
     agent.name
   )}" data-owner-channel="${esc(channel.name)}" role="button" tabindex="0" aria-label="查看智能体 ${esc(
     agent.displayName
-  )}，${esc(agent.workStateLabel)}" transform="translate(${x} ${y})"><title>${esc(agent.displayName)} · ${esc(
-    agent.workStateLabel
-  )} · ${esc(agent.task)}</title>${hitArea}${
-    cls === 'active' ? `<circle class="node-halo" r="${focus ? 26 : 15}"/>` : ''
-  }<circle class="node-shell" r="${focus ? 20 : 10}"/><text class="node-initial" y="3" style="font-size:${
-    focus ? 11 : 7
-  }px">${esc(initials(agent))}</text><text class="${label} ${channel.name === state.channel ? 'selected' : ''}" y="${
-    focus ? 47 : 25
-  }">${esc(agent.displayName.slice(0, 8))}</text>${
+  )}，${esc(agent.workStateLabel)}" transform="translate(${x} ${y})" style="--node-delay:${index * -0.55}s"><title>${esc(
+    agent.displayName
+  )} · ${esc(agent.workStateLabel)} · ${esc(agent.task)}</title>${hitArea}<g class="node-visual">${
+    focus && animated
+      ? '<circle class="node-pulse" r="25"/><circle class="node-orbit" r="29" pathLength="100"/>'
+      : cls === 'active'
+        ? `<circle class="node-halo" r="${focus ? 26 : 15}"/>`
+        : ''
+  }<circle class="node-shell" r="${focus ? 20 : 10}"/>${
+    focus ? '<circle class="node-shell-detail" r="15"/><circle class="node-status-dot" cx="14" cy="-14" r="3.5"/>' : ''
+  }<text class="node-initial" y="3" style="font-size:${focus ? 11 : 7}px">${esc(
+    initials(agent)
+  )}</text></g><text class="${label} ${channel.name === state.channel ? 'selected' : ''}" y="${labelY}" ${labelAnchor}>${esc(
+    agent.displayName.slice(0, 8)
+  )}</text>${
     focus
-      ? `<text class="focus-task" y="67">${esc(agent.task.slice(0, 22))}</text><text class="focus-status" y="85">${esc(
+      ? `<text class="focus-task" y="${taskY}" ${labelAnchor}>${esc(agent.task.slice(0, 22))}</text><text class="focus-status" y="${statusY}" ${labelAnchor}>${esc(
           agent.workStateLabel
         )} · ${esc(agent.host || '主机未知')}</text>`
       : ''
@@ -760,16 +899,15 @@ function renderGraph() {
   if (state.view === 'global') {
     const layout = layoutGlobal();
     html +=
-      '<ellipse class="network-orbit" cx="450" cy="220" rx="287" ry="128"/><ellipse class="network-ring" cx="450" cy="220" rx="314" ry="148"/><path d="M 450 35 V 420 M 70 220 H 830" stroke="#24434b" opacity=".25" stroke-dasharray="3 8"/>';
+      '<g class="global-backdrop" aria-hidden="true"><ellipse class="network-orbit" cx="450" cy="220" rx="287" ry="128"/><ellipse class="network-ring" cx="450" cy="220" rx="326" ry="158"/><ellipse class="global-scan-orbit" cx="450" cy="220" rx="326" ry="158" pathLength="100"/><path class="global-axis" d="M450 38V402M84 220H816"/><path class="global-calibration" d="M450 54V64M450 376V386M120 216V224M780 216V224"/><circle class="orbit-beacon" cx="450" cy="62" r="2"/><circle class="orbit-beacon" cx="776" cy="220" r="2"/><circle class="orbit-beacon" cx="124" cy="220" r="2"/></g>';
 
     layout.channels.forEach((entry, index) => {
       const cls = channelClass(entry.channel);
       const flowing = cls === 'active' || cls === 'warning';
-      html += `<path id="flow-${index}" class="channel-link ${
-        cls === 'warning' ? 'warning' : ''
-      } ${flowing ? '' : 'inactive'}" d="${routeToChannel(entry.x, entry.y)}" marker-end="url(#${
-        cls === 'warning' ? 'arrow-amber' : 'arrow'
-      })"/>`;
+      const route = routeToChannel(entry.x, entry.y);
+      html += `<path class="flow-link-bed" d="${route}"/><path id="flow-${index}" class="channel-link ${
+        cls === 'warning' ? 'warning' : flowing ? 'selected' : 'inactive'
+      }" d="${route}" pathLength="100" marker-end="url(#${cls === 'warning' ? 'arrow-amber' : 'arrow'})"/>`;
       if (flowing && state.mode === 'demo')
         html += packet(`flow-${index}`, 4 + index * 0.4, index * 0.8, cls === 'warning');
     });
@@ -783,8 +921,7 @@ function renderGraph() {
       if (flowing && state.mode === 'demo') html += packet(id, 3 + (index % 5) * 0.6, index % 7);
     });
 
-    html +=
-      '<g class="relay-core"><circle class="core-ring" cx="450" cy="220" r="68"/><circle class="core-ring-dashed" cx="450" cy="220" r="62"/><circle class="core-shell" cx="450" cy="220" r="53"/><circle cx="450" cy="220" r="47" fill="none" stroke="#31656a" stroke-width=".6"/><path d="M 435 195 H 465 M 445 191 H 455" stroke="#8fe5d2" stroke-width="1.2"/><text class="core-label" x="453" y="224">协作中枢</text><text class="core-subtitle" x="451" y="241">工作空间</text><circle class="core-pin" cx="450" cy="288" r="3"/><text class="core-status" x="450" y="307">工作空间 · 逻辑聚合</text></g>';
+    html += workspaceCore();
 
     layout.channels.forEach((entry, index) => {
       html += channelNode(entry, index);
@@ -793,33 +930,33 @@ function renderGraph() {
       html += agentNode(entry);
     });
 
-    svg.setAttribute('viewBox', '0 0 900 440');
+    svg.setAttribute('viewBox', layout.viewBox);
     $('#graph-coordinate-right').innerHTML =
       `${String(activeChannels().length).padStart(2, '0')} 个频道<br><span>${
         state.agents.length
       } 个智能体</span>`;
   } else if (channel) {
     const members = layoutFocus(channel);
-    html += `<ellipse class="network-ring" cx="450" cy="300" rx="285" ry="210"/><text x="450" y="34" text-anchor="middle" fill="#6f959f" font-size="11">频道聚焦 / ${esc(
-      channel.displayName
-    )}</text>`;
+    html += focusBackdrop(channel);
     members.forEach((entry, index) => {
       const flowing = agentClass(entry.agent) === 'active';
+      const warning = agentClass(entry.agent) === 'warning';
       const id = `focus-${index}`;
-      html += `<path id="${id}" class="channel-link ${flowing ? 'selected' : 'inactive'}" d="M 450 300 Q ${entry.x} 300 ${entry.x} ${entry.y}" marker-end="url(#arrow)"/>`;
-      if (flowing && state.mode === 'demo') html += packet(id, 3.5, index);
+      const route = routeToAgent(entry);
+      html += `<path class="flow-link-bed" d="${route}"/><path id="${id}" class="channel-link ${
+        flowing ? 'selected' : warning ? 'warning' : 'inactive'
+      }" d="${route}" pathLength="100" marker-end="url(#${warning ? 'arrow-amber' : 'arrow'})"/>`;
+      if (flowing && state.mode === 'demo') {
+        html += `<path class="flow-link-glint demo-stream" d="${route}" pathLength="100"/>`;
+        html += packet(id, 3.4 + index * 0.18, index * 0.85);
+        html += packet(id, 3.4 + index * 0.18, index * 0.85 + 1.7);
+      }
     });
-    html += `<rect x="327" y="257" width="246" height="86" rx="9" fill="#16363a" stroke="#6dbbb6"/><text x="450" y="288" text-anchor="middle" fill="#d1fbf2" font-size="18"># ${esc(
-      channel.displayName.slice(0, 10)
-    )}</text><text x="450" y="312" text-anchor="middle" fill="#86b8b1" font-size="11">${esc(
-      channel.stateLabel
-    )} · ${channel.memberCount} 个参与智能体</text><text x="450" y="330" text-anchor="middle" fill="#6f959f" font-size="9">${esc(
-      channel.stateReason.slice(0, 30)
-    )}</text>`;
-    members.forEach((entry) => {
-      html += agentNode(entry, true);
+    html += channelCore(channel);
+    members.forEach((entry, index) => {
+      html += agentNode(entry, true, index);
     });
-    svg.setAttribute('viewBox', '0 0 900 620');
+    svg.setAttribute('viewBox', ($('#graph-stage')?.clientWidth || 900) < 520 ? '140 0 620 620' : '0 0 900 620');
     $('#graph-coordinate-right').innerHTML =
       `${esc(channel.displayName)}<br><span>${members.length} 个参与智能体</span>`;
   } else {
@@ -879,12 +1016,15 @@ function graphScale() {
   const matrix = svg.getScreenCTM?.();
   if (matrix) return Math.hypot(matrix.a, matrix.b) || 1;
   const rect = svg.getBoundingClientRect();
-  return Math.min(rect.width / 900, rect.height / (state.view === 'global' ? 440 : 620)) || 1;
+  const viewWidth = svg.viewBox?.baseVal?.width || 900;
+  return Math.min(rect.width / viewWidth, rect.height / (state.view === 'global' ? 440 : 620)) || 1;
 }
 
 function zoomBounds() {
-  // SVG viewBox fitting must not shrink the 13px type below 13 screen pixels.
-  const min = Math.max(0.7, 1 / graphScale());
+  // Narrow screens use a dedicated layout and larger SVG type, so the full map
+  // can remain visible instead of forcing a cropped, magnified desktop canvas.
+  const narrow = ($('#graph-stage')?.clientWidth || 900) < 520;
+  const min = narrow ? 1 : Math.max(0.7, 1 / graphScale());
   return { min, max: Math.max(4, min * 4) };
 }
 
@@ -1273,6 +1413,7 @@ function renderConnection() {
   const chipLive = $('#topology-live');
   chipLive.textContent = state.paused ? '已暂停' : live ? '实时事件' : connection.label;
   chipLive.classList.toggle('paused', !live || state.paused);
+  document.body.classList.toggle('observer-paused', state.paused);
   renderPage();
 }
 
@@ -1611,7 +1752,9 @@ function renderRecent() {
           message.time
         )}</time><span class="activity-route"><b>${esc(message.fromName)}</b><em>→</em>${esc(
           recipientLabel(message)
-        )}</span><span class="activity-tag">#${esc(channelLabel(message.channel, message.channelLabel))}</span></button>`
+        )}</span><span class="activity-tag">#${esc(channelLabel(message.channel, message.channelLabel))}</span><span class="activity-preview">${esc(
+          message.text.replace(/\s+/g, ' ').slice(0, 72)
+        )}</span></button>`
     )
     .join('');
 }
@@ -1859,8 +2002,9 @@ $('#graph-stage').addEventListener('wheel', (event) => {
   const delta = Math.max(-400, Math.min(400, event.deltaY * unit));
   changeZoom(state.zoom * Math.exp(-delta * 0.002), event);
 }, { passive: false });
-if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => updateZoom()).observe($('#network'));
-window.addEventListener('resize', updateZoom);
+const resizeGraph = () => (state.workspace ? renderGraph() : updateZoom());
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeGraph).observe($('#network'));
+window.addEventListener('resize', resizeGraph);
 
 let drag = null;
 $('#graph-stage').onpointerdown = (event) => {
@@ -1871,7 +2015,7 @@ $('#graph-stage').onpointerdown = (event) => {
     y: event.clientY,
     panX: state.panX,
     panY: state.panY,
-    scale: Math.min(rect.width / 900, rect.height / (state.view === 'global' ? 440 : 620)) || 1,
+    scale: Math.min(rect.width / ($('#network').viewBox?.baseVal?.width || 900), rect.height / (state.view === 'global' ? 440 : 620)) || 1,
   };
   $('#graph-stage').setPointerCapture(event.pointerId);
   $('#graph-stage').classList.add('dragging');
@@ -2033,9 +2177,35 @@ async function mountDesktopMenu() {
   };
 }
 
+/* -------------------------------------------------------- spatial response */
+
+function bindSpatialLight() {
+  let frame = 0;
+  let pointer = null;
+  document.addEventListener(
+    'pointermove',
+    (event) => {
+      if (reduced.matches || event.pointerType === 'touch') return;
+      pointer = event;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        const surface = pointer?.target.closest?.('.spatial-surface, .metric, .channel-item, .agent-card');
+        if (surface) {
+          const rect = surface.getBoundingClientRect();
+          surface.style.setProperty('--pointer-x', `${pointer.clientX - rect.left}px`);
+          surface.style.setProperty('--pointer-y', `${pointer.clientY - rect.top}px`);
+        }
+        frame = 0;
+      });
+    },
+    { passive: true }
+  );
+}
+
 /* -------------------------------------------------------------------- init */
 
 applyMinimumTextSize();
+bindSpatialLight();
 renderLiveToggle();
 tickClock();
 void mountDesktopMenu();
