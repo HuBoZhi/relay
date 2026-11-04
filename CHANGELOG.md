@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Invoke-CodexMailbox.ps1`: register a Relay inbox for an existing Codex desktop chat so other agents can address it by thread ID and Codex can actively read incoming messages.
+
 - `@agent-relay/control-room-desktop`: the Windows Factory launcher runs through an independent hidden host and writes client logs to files, allowing the Relay startup terminal to close.
 
 - `@agent-relay/control-room-desktop`: Windows unified-start scripts can keep the console under an independent supervisor, restart it after process exit, and expose an explicit stop command and lifecycle log.
