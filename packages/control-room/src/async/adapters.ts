@@ -329,7 +329,9 @@ export class HttpBridgeAdapter implements DispatchAdapter {
       const body = await this.post('/probe', { client: this.client });
       return {
         ok: body.ok === true,
-        interfaceReady: body.interfaceReady === true ? 'supported' : 'unverified',
+        // A bridge may answer with a boolean or with the capability word; both mean
+        // the same thing, and neither may be guessed from the other.
+        interfaceReady: toCapabilityState(body.interfaceReady),
         version: stringOrNull(body.version),
         notes: Array.isArray(body.notes) ? body.notes.map(String) : [],
         error: stringOrNull(body.error) ?? undefined,
@@ -381,6 +383,13 @@ export function assertLoopback(url: string): void {
   if (!allowed.has(host)) {
     throw new Error(`派发桥接必须监听本机回环地址，收到：${host}`);
   }
+}
+
+function toCapabilityState(value: unknown): CapabilityState {
+  if (value === true || value === 'supported') return 'supported';
+  if (value === false) return 'unverified';
+  if (value === 'unsupported') return 'unsupported';
+  return 'unverified';
 }
 
 function stringOrNull(value: unknown): string | null {
