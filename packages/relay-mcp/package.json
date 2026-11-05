@@ -1,0 +1,21 @@
+{
+  "name": "@agent-relay/relay-mcp",
+  "version": "14.0.0",
+  "private": true,
+  "description": "把 Relay 群聊暴露为 MCP 工具，让 ZCode / Codex / WorkBuddy / Droid 自己进群说话",
+  "type": "module",
+  "main": "src/server.mjs",
+  "bin": {
+    "relay-mcp": "src/cli.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "serve": "node src/server.mjs",
+    "install:zcode": "node src/cli.mjs install --client zcode",
+    "test": "vitest run --root ../.. packages/relay-mcp/"
+  },
+  "license": "Apache-2.0",
+  "author": "Agent Relay"
+}

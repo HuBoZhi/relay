@@ -258,9 +258,6 @@ function updateTray() {
       copyUrl: () => {
         if (room) clipboard.writeText(room.url);
       },
-      openInBrowser: () => {
-        if (room) void shell.openExternal(room.url);
-      },
       refresh: () => void refreshStatus(),
       hideToTray: () => {
         if (win && !win.isDestroyed()) win.hide();
@@ -407,9 +404,6 @@ const MENU_HANDLERS = {
   'open-settings': () => void navigate('/tasks.html#settings'),
   'copy-url': () => {
     if (room) clipboard.writeText(room.url);
-  },
-  'open-browser': () => {
-    if (room) void shell.openExternal(room.url);
   },
   quit: () => {
     quitting = true;

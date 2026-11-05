@@ -98,7 +98,6 @@ export function buildTrayMenu({
     { label: '打开任务工作台', click: actions.openTasks },
     { label: '设置数据目录与启动行为', click: actions.openSettings },
     { label: '复制访问地址', enabled: Boolean(url), click: actions.copyUrl },
-    { label: '在浏览器中打开', enabled: Boolean(url), click: actions.openInBrowser },
     { type: 'separator' },
     ...rows,
     { type: 'separator' },
