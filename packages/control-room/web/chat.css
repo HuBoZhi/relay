@@ -790,3 +790,61 @@ body {
   border-color: color-mix(in srgb, var(--cyan) 55%, var(--line));
   color: #b9fbf5;
 }
+
+/* Participants: one row per addressed agent, each with its own model. */
+.participants-block {
+  display: grid;
+  gap: 6px;
+}
+
+.participants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: #7b8b96;
+}
+
+.participants {
+  display: grid;
+  gap: 6px;
+}
+
+.participant {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 120px 56px;
+  gap: 8px;
+  align-items: center;
+}
+
+.participant select,
+.participant input {
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: #0d141a;
+  font-size: 12px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.participant select:focus,
+.participant input:focus {
+  border-color: color-mix(in srgb, var(--cyan) 50%, var(--line));
+}
+
+.participant .link-button {
+  justify-self: start;
+}
+
+.participant-spacer {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .participant {
+    grid-template-columns: 1fr 1fr;
+  }
+}

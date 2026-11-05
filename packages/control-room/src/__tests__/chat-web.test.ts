@@ -166,6 +166,20 @@ describe('chat page', () => {
     (window as unknown as { fetch: unknown }).fetch = vi.fn(async (url: string, init?: RequestInit) => {
       const call = { url, init };
       calls.push(call);
+      // The composer asks the app for the client's own project list; answer it so
+      // the select exists in these tests.
+      if (String(url).startsWith('/api/async/projects')) {
+        const payload = {
+          client: 'zcode',
+          projects: [{ id: 'proj_1', name: 'MediaDock', path: 'D:////Work////MediaDock' }],
+        };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => payload,
+          text: async () => JSON.stringify(payload),
+        };
+      }
       const body = handler(call);
       const status = (body as { status?: number })?.status ?? 200;
       const payload = (body as { body?: unknown })?.body ?? body;
@@ -234,12 +248,46 @@ describe('chat page', () => {
   it('refuses a dispatch with no project before leaving the page', async () => {
     const ui = await setup(route());
     (ui.element('#body-input') as HTMLTextAreaElement).value = '把注册页校验补上';
-    (ui.element('#path-input') as HTMLInputElement).value = '';
+    // The project list is available now, so "nothing chosen" means an empty select.
+    for (let i = 0; i < 40 && !ui.element('#path-select'); i += 1) await settle();
+    (ui.element('#path-select') as HTMLSelectElement).value = '';
     (ui.element('#dispatch-button') as HTMLButtonElement).click();
     await settle();
 
     expect(ui.text()).toContain('派活必须指定项目目录');
     expect(ui.calls.filter((call) => call.init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('gives each addressed agent its own model', async () => {
+    const ui = await setup(route());
+    await settle();
+    ui.element('#add-participant')?.click();
+    await settle();
+
+    const rows = ui.window.document.querySelectorAll('#participants .participant');
+    expect(rows).toHaveLength(2);
+    const second = rows[1] as HTMLElement;
+    (second.querySelector('[data-role="target"]') as HTMLSelectElement).value = 'codex';
+    (second.querySelector('[data-role="model"]') as HTMLInputElement).value = 'gpt-5-codex';
+    (second.querySelector('[data-role="reasoning"]') as HTMLSelectElement).value = 'high';
+
+    // The project list arrives asynchronously and re-renders the composer.
+    for (let i = 0; i < 40 && !ui.window.document.querySelector('#path-select'); i += 1) await settle();
+    (ui.window.document.querySelector('#body-input') as HTMLTextAreaElement).value = '两位分别看下';
+    (ui.window.document.querySelector('#path-select') as HTMLSelectElement).value = 'D:////Work////MediaDock';
+    (ui.element('#dispatch-button') as HTMLButtonElement).click();
+    await settle();
+    await settle();
+
+    const posted = ui.calls.find((call) => call.init?.method === 'POST');
+    expect(posted).toBeTruthy();
+    const payload = JSON.parse(String(posted?.init?.body)) as {
+      mentions: { target: string; model?: { modelId: string; reasoning: string } }[];
+    };
+    expect(payload.mentions.map((mention) => mention.target)).toEqual(['zcode', 'codex']);
+    expect(payload.mentions[0]?.model?.modelId).toBe('GLM-5.3-Flash');
+    expect(payload.mentions[1]?.model?.modelId).toBe('gpt-5-codex');
+    expect(payload.mentions[1]?.model?.reasoning).toBe('high');
   });
 
   it('sends a plain message as an address, with no client and no project', async () => {

@@ -30,6 +30,15 @@ const AGENTS = [
   { id: 'factory', label: 'Factory', app: 'factory' },
 ];
 
+const AGENT_DEFAULTS = {
+  codex: { model: 'gpt-5-codex', reasoning: 'high' },
+  zcode: { model: 'GLM-5.3-Flash', reasoning: 'max' },
+  workbuddy: { model: '本机默认', reasoning: 'max' },
+  factory: { model: '本机默认', reasoning: 'max' },
+};
+
+const REASONING_LEVELS = ['low', 'medium', 'high', 'max'];
+
 const SEND_STATE = {
   sent: ['已发出', 'info'],
   queued: ['已排队', 'warn'],
@@ -59,10 +68,9 @@ const state = {
   me: null,
   draft: {
     body: '',
-    targets: ['zcode'],
-    model: 'GLM-5.3-Flash',
-    account: 'BigModel',
-    reasoning: 'max',
+    // Each addressed agent carries its own model and reasoning level: two agents in
+    // one message rarely run the same model.
+    participants: [{ target: 'zcode', model: 'GLM-5.3-Flash', reasoning: 'max' }],
     path: '',
     projectId: '',
   },
@@ -331,9 +339,7 @@ function renderMessage(message) {
 
 function renderComposer() {
   const draft = state.draft;
-  // Projects belong to a client; showing ZCode's folders under WorkBuddy would be
-  // a lie, so the list is only used while it matches the selected target.
-  const primary = draft.targets[0] ?? null;
+  const primary = draft.participants[0]?.target ?? null;
   const projects = state.projects.client === primary ? state.projects : { list: [], reason: null };
   const issue = (field) => {
     const found = state.issues.find((item) => item.field === field);
@@ -342,38 +348,44 @@ function renderComposer() {
   const invalid = (field) =>
     state.issues.some((item) => item.field === field) ? ' data-invalid="true"' : '';
 
-  return `<div class="composer">
-    <textarea id="body-input" placeholder="说点什么，或者 @ 一个 Agent 派活…">${esc(draft.body)}</textarea>
-    <div class="composer-row targets-row">
-      <div class="field targets">
-        <label>@ 谁（可多选）</label>
-        <div class="chips" id="target-chips" role="group" aria-label="选择要 @ 的 Agent">
+  const rows = draft.participants
+    .map(
+      (participant, index) => `<div class="participant" data-index="${index}">
+        <select data-role="target" aria-label="第 ${index + 1} 个 Agent">
           ${AGENTS.map(
             (agent) =>
-              `<button type="button" class="chip-toggle${draft.targets.includes(agent.id) ? ' on' : ''}" data-target="${agent.id}" aria-pressed="${draft.targets.includes(agent.id)}">${agent.label}</button>`
+              `<option value="${agent.id}"${agent.id === participant.target ? ' selected' : ''}>${agent.label}</option>`
           ).join('')}
-        </div>
+        </select>
+        <input data-role="model" value="${esc(participant.model)}" placeholder="模型" aria-label="模型" />
+        <select data-role="reasoning" aria-label="思考强度">
+          ${REASONING_LEVELS.map(
+            (level) =>
+              `<option value="${level}"${level === participant.reasoning ? ' selected' : ''}>${level}</option>`
+          ).join('')}
+        </select>
+        ${
+          draft.participants.length > 1
+            ? `<button type="button" class="link-button" data-role="remove">移除</button>`
+            : '<span class="participant-spacer"></span>'
+        }
+      </div>`
+    )
+    .join('');
+
+  return `<div class="composer">
+    <textarea id="body-input" placeholder="说点什么，或者 @ 一个 Agent 派活…">${esc(draft.body)}</textarea>
+    <div class="participants-block">
+      <div class="participants-head">
+        <span>@ 谁（每行一个 Agent，可各自选模型）</span>
+        <button class="link-button" type="button" id="add-participant">+ 新增 Agent</button>
       </div>
+      <div class="participants" id="participants">${rows}</div>
+      ${issue('mentions[0].model')}
     </div>
     <div class="composer-row">
-      <div class="field${invalid('mentions[0].model')}">
-        <label for="model-input">模型</label>
-        <input id="model-input" value="${esc(draft.model)}" placeholder="GLM-5.3-Flash" />
-        ${issue('mentions[0].model')}
-      </div>
-      <div class="field">
-        <label for="reasoning-select">思考强度</label>
-        <select id="reasoning-select">
-          ${['low', 'medium', 'high', 'max']
-            .map(
-              (level) =>
-                `<option value="${level}"${level === draft.reasoning ? ' selected' : ''}>${level}</option>`
-            )
-            .join('')}
-        </select>
-      </div>
       <div class="field grow${invalid('mentions[0].project.path')}">
-        <label for="path-select">项目目录</label>
+        <label for="path-select">项目目录（本次消息共用）</label>
         ${
           projects.list.length > 0
             ? `<select id="path-select">
@@ -385,7 +397,7 @@ function renderComposer() {
                 )
                 .join('')}
             </select>`
-            : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:\\Work\\MediaDock" />`
+            : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:////Work////MediaDock" />`
         }
         ${
           projects.list.length === 0 && projects.reason
@@ -398,7 +410,7 @@ function renderComposer() {
     <div class="composer-actions">
       <button class="button-primary" type="button" id="dispatch-button">@ 派活</button>
       <button class="button-ghost" type="button" id="send-button">发送消息</button>
-      <span class="hint">派活需要模型、思考强度与项目；只发消息则不会派发，也不会创建会话。</span>
+      <span class="hint">派活需要模型与项目；只发消息则不会派发，也不会创建会话。</span>
     </div>
   </div>`;
 }
@@ -438,7 +450,7 @@ function renderConversation() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
   bindComposer();
   // One fetch per client: the guard keeps the re-render from asking again.
-  const primaryTarget = state.draft.targets[0] ?? null;
+  const primaryTarget = state.draft.participants[0]?.target ?? null;
   if (primaryTarget && state.projects.client !== primaryTarget) void loadProjects(primaryTarget);
   $$('[data-report]').forEach((button) => {
     button.onclick = () => void reportResult(button.dataset.report);
@@ -452,9 +464,11 @@ function readDraft() {
   const body = $('#body-input');
   if (!body) return;
   state.draft.body = body.value;
-  state.draft.targets = $$('#target-chips .chip-toggle.on').map((chip) => chip.dataset.target);
-  state.draft.model = $('#model-input').value;
-  state.draft.reasoning = $('#reasoning-select').value;
+  state.draft.participants = $$('#participants .participant').map((row) => ({
+    target: row.querySelector('[data-role="target"]').value,
+    model: row.querySelector('[data-role="model"]').value,
+    reasoning: row.querySelector('[data-role="reasoning"]').value,
+  }));
   const projectSelect = $('#path-select');
   const pathInput = $('#path-input');
   if (projectSelect) {
@@ -466,32 +480,36 @@ function readDraft() {
   }
 }
 
+/**
+ * One mention per participant, each with its own model.
+ *
+ * The project is shared: the work happens in one folder even when several agents
+ * look at it.
+ */
 function mentionsFor(work) {
-  // One message may address several agents: each becomes its own mention, and the
-  // engine dispatches one stage per mention (same project and model).
-  return state.draft.targets.map((target) => mentionFor(target, work));
-}
-
-function mentionFor(target, work) {
-  const base = { target };
-  if (!work) return base;
-  return {
-    ...base,
-    client: target,
-    ...(state.draft.model.trim()
-      ? {
-          model: {
-            account: state.draft.account,
-            provider: state.draft.account,
-            modelId: state.draft.model.trim(),
-            reasoning: state.draft.reasoning,
-          },
-        }
-      : {}),
-    ...(state.draft.path.trim()
-      ? { project: { id: state.draft.projectId.trim(), path: state.draft.path.trim() } }
-      : {}),
-  };
+  return state.draft.participants
+    .filter((participant) => participant.target)
+    .map((participant) => {
+      if (!work) return { target: participant.target };
+      const model = participant.model.trim();
+      return {
+        target: participant.target,
+        client: participant.target,
+        ...(model
+          ? {
+              model: {
+                account: participant.target === 'zcode' ? 'BigModel' : participant.target,
+                provider: participant.target === 'zcode' ? 'zhipu' : participant.target,
+                modelId: model,
+                reasoning: participant.reasoning,
+              },
+            }
+          : {}),
+        ...(state.draft.path.trim()
+          ? { project: { id: state.draft.projectId.trim(), path: state.draft.path.trim() } }
+          : {}),
+      };
+    });
 }
 
 async function send(work) {
@@ -506,7 +524,13 @@ async function send(work) {
   }
   if (work) {
     const issues = [];
-    if (!state.draft.model.trim()) issues.push({ field: 'mentions[0].model', message: '派活必须指定模型' });
+    if (state.draft.participants.some((participant) => !participant.model.trim())) {
+      issues.push({ field: 'mentions[0].model', message: '每个 Agent 都要填模型' });
+    }
+    const targets = state.draft.participants.map((participant) => participant.target);
+    if (new Set(targets).size !== targets.length) {
+      issues.push({ field: 'mentions[0].model', message: '同一个 Agent 只能出现一次' });
+    }
     if (!state.draft.path.trim())
       issues.push({ field: 'mentions[0].project.path', message: '派活必须指定项目目录' });
     if (issues.length > 0) {
@@ -607,31 +631,43 @@ function bindComposer() {
       }
     };
   }
-  for (const [id, key] of [
-    ['#model-input', 'model'],
-    ['#reasoning-select', 'reasoning'],
-  ]) {
-    const element = $(id);
-    if (element)
-      element.onchange = () => {
-        state.draft[key] = element.value;
+
+  $$('#participants .participant').forEach((row, index) => {
+    const target = row.querySelector('[data-role="target"]');
+    if (target) {
+      target.onchange = () => {
+        readDraft();
+        // Switching the agent resets the model to that agent's default: the two
+        // clients rarely accept the same model id.
+        const defaults = AGENT_DEFAULTS[target.value];
+        if (defaults) state.draft.participants[index] = { target: target.value, ...defaults };
+        if (index === 0) void loadProjects(target.value);
+        renderConversation();
       };
-  }
-  $$('#target-chips .chip-toggle').forEach((chip) => {
-    chip.onclick = () => {
+    }
+    const remove = row.querySelector('[data-role="remove"]');
+    if (remove) {
+      remove.onclick = () => {
+        readDraft();
+        state.draft.participants.splice(index, 1);
+        renderConversation();
+      };
+    }
+  });
+
+  const add = $('#add-participant');
+  if (add) {
+    add.onclick = () => {
       readDraft();
-      const id = chip.dataset.target;
-      const on = state.draft.targets.includes(id);
-      state.draft.targets = on
-        ? state.draft.targets.filter((item) => item !== id)
-        : [...state.draft.targets, id];
-      // At least one target keeps the composer meaningful.
-      if (state.draft.targets.length === 0) state.draft.targets = [id];
-      const primary = state.draft.targets[0];
-      if (state.projects.client !== primary) void loadProjects(primary);
+      // Pick an agent that is not in the list yet; repeated clients would only
+      // queue behind each other.
+      const used = new Set(state.draft.participants.map((participant) => participant.target));
+      const next = AGENTS.find((agent) => !used.has(agent.id)) ?? AGENTS[0];
+      state.draft.participants.push({ target: next.id, ...AGENT_DEFAULTS[next.id] });
       renderConversation();
     };
-  });
+  }
+
   const projectSelect = $('#path-select');
   if (projectSelect) {
     // The project id is derived from the selection and sent with the request; it is
