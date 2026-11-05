@@ -240,6 +240,31 @@ describe('group chat', () => {
     await engine.close();
   });
 
+  it('broadcasts one message to several agents at once', async () => {
+    const zcode = new FakeZcode();
+    const workbuddy = new FakeZcode('workbuddy');
+    const engine = new AsyncEngine({
+      adapters: [zcode, workbuddy, new FakeZcode('codex')],
+      dataRoot: await scratchRoot(),
+    });
+    const { group } = await engine.createGroup({ name: '群B', creator: codex });
+
+    const posted = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '两位一起看下这个空状态',
+      mentions: [workMention(), workMention({ target: 'workbuddy', client: 'workbuddy' })],
+    });
+
+    // One message, two dispatches: a stage per mention, both started now.
+    expect(posted.message.mentions).toHaveLength(2);
+    expect(zcode.dispatches).toHaveLength(1);
+    expect(workbuddy.dispatches).toHaveLength(1);
+    const detail = await engine.task(posted.receipt?.taskId as string);
+    expect(detail?.stages).toHaveLength(2);
+    expect(detail?.runs).toHaveLength(2);
+    await engine.close();
+  });
+
   it('reports a failed request as failed and starts nothing', async () => {
     const adapter = new FakeZcode();
     const engine = new AsyncEngine({

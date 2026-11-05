@@ -755,3 +755,38 @@ body {
     display: none;
   }
 }
+
+/* Multi-target picker: chips instead of a single select. */
+.field.targets {
+  flex: 2 1 240px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+  align-items: center;
+}
+
+.chip-toggle {
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #0d141a;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chip-toggle:hover {
+  color: var(--text);
+  border-color: #34464f;
+}
+
+.chip-toggle.on {
+  background: color-mix(in srgb, var(--cyan) 16%, #0d141a);
+  border-color: color-mix(in srgb, var(--cyan) 55%, var(--line));
+  color: #b9fbf5;
+}

@@ -59,7 +59,7 @@ const state = {
   me: null,
   draft: {
     body: '',
-    target: 'zcode',
+    targets: ['zcode'],
     model: 'GLM-5.3-Flash',
     account: 'BigModel',
     reasoning: 'max',
@@ -285,11 +285,14 @@ function renderMessage(message) {
   let head = '';
   if (message.kind === 'request') {
     const mention = message.mentions[0];
+    const targets = message.mentions.map((item) => item.target).filter(Boolean);
     const model =
       mention && mention.model ? `${mention.model.modelId} · ${mention.model.reasoning}` : '未指定模型';
     const project = mention && mention.project ? mention.project.path : '未指定项目';
+    // Several targets in one message are one broadcast: show them all.
+    const targetTags = targets.map((target) => `<span class="tag target">@${esc(target)}</span>`).join('');
     head = `<div class="meta">
-      <span class="tag target">@${esc(mention ? mention.target : '')}</span>
+      ${targetTags}
       <span class="tag">${esc(model)}</span>
       <span class="tag project" title="${esc(project)}">${esc(project)}</span>
       ${badge(SEND_STATE, message.state)}
@@ -330,9 +333,8 @@ function renderComposer() {
   const draft = state.draft;
   // Projects belong to a client; showing ZCode's folders under WorkBuddy would be
   // a lie, so the list is only used while it matches the selected target.
-  const projects = state.projects.client === draft.target
-    ? state.projects
-    : { list: [], reason: null };
+  const primary = draft.targets[0] ?? null;
+  const projects = state.projects.client === primary ? state.projects : { list: [], reason: null };
   const issue = (field) => {
     const found = state.issues.find((item) => item.field === field);
     return found ? `<span class="error">${esc(found.message)}</span>` : '';
@@ -342,13 +344,18 @@ function renderComposer() {
 
   return `<div class="composer">
     <textarea id="body-input" placeholder="说点什么，或者 @ 一个 Agent 派活…">${esc(draft.body)}</textarea>
-    <div class="composer-row">
-      <div class="field">
-        <label for="target-select">@ 谁</label>
-        <select id="target-select">
-          ${AGENTS.map((agent) => `<option value="${agent.id}"${agent.id === draft.target ? ' selected' : ''}>${agent.label}</option>`).join('')}
-        </select>
+    <div class="composer-row targets-row">
+      <div class="field targets">
+        <label>@ 谁（可多选）</label>
+        <div class="chips" id="target-chips" role="group" aria-label="选择要 @ 的 Agent">
+          ${AGENTS.map(
+            (agent) =>
+              `<button type="button" class="chip-toggle${draft.targets.includes(agent.id) ? ' on' : ''}" data-target="${agent.id}" aria-pressed="${draft.targets.includes(agent.id)}">${agent.label}</button>`
+          ).join('')}
+        </div>
       </div>
+    </div>
+    <div class="composer-row">
       <div class="field${invalid('mentions[0].model')}">
         <label for="model-input">模型</label>
         <input id="model-input" value="${esc(draft.model)}" placeholder="GLM-5.3-Flash" />
@@ -367,8 +374,9 @@ function renderComposer() {
       </div>
       <div class="field grow${invalid('mentions[0].project.path')}">
         <label for="path-select">项目目录</label>
-        ${projects.list.length > 0
-          ? `<select id="path-select">
+        ${
+          projects.list.length > 0
+            ? `<select id="path-select">
               <option value="">选择项目…</option>
               ${projects.list
                 .map(
@@ -377,10 +385,13 @@ function renderComposer() {
                 )
                 .join('')}
             </select>`
-          : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:\\Work\\MediaDock" />`}
-        ${projects.list.length === 0 && projects.reason
-          ? `<span class="hint">${esc(projects.reason)}；可直接填写目录</span>`
-          : ''}
+            : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:\\Work\\MediaDock" />`
+        }
+        ${
+          projects.list.length === 0 && projects.reason
+            ? `<span class="hint">${esc(projects.reason)}；可直接填写目录</span>`
+            : ''
+        }
         ${issue('mentions[0].project.path')}
       </div>
       <div class="field id">
@@ -433,7 +444,8 @@ function renderConversation() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
   bindComposer();
   // One fetch per client: the guard keeps the re-render from asking again.
-  if (state.projects.client !== state.draft.target) void loadProjects(state.draft.target);
+  const primaryTarget = state.draft.targets[0] ?? null;
+  if (primaryTarget && state.projects.client !== primaryTarget) void loadProjects(primaryTarget);
   $$('[data-report]').forEach((button) => {
     button.onclick = () => void reportResult(button.dataset.report);
   });
@@ -446,7 +458,7 @@ function readDraft() {
   const body = $('#body-input');
   if (!body) return;
   state.draft.body = body.value;
-  state.draft.target = $('#target-select').value;
+  state.draft.targets = $$('#target-chips .chip-toggle.on').map((chip) => chip.dataset.target);
   state.draft.model = $('#model-input').value;
   state.draft.reasoning = $('#reasoning-select').value;
   const projectSelect = $('#path-select');
@@ -460,12 +472,18 @@ function readDraft() {
   }
 }
 
-function mentionFor(work) {
-  const base = { target: state.draft.target };
+function mentionsFor(work) {
+  // One message may address several agents: each becomes its own mention, and the
+  // engine dispatches one stage per mention (same project and model).
+  return state.draft.targets.map((target) => mentionFor(target, work));
+}
+
+function mentionFor(target, work) {
+  const base = { target };
   if (!work) return base;
   return {
     ...base,
-    client: state.draft.target,
+    client: target,
     ...(state.draft.model.trim()
       ? {
           model: {
@@ -508,7 +526,7 @@ async function send(work) {
   try {
     await api(`/api/groups/${encodeURIComponent(state.view.group.id)}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ sender: senderPayload(), body, mentions: [mentionFor(work)] }),
+      body: JSON.stringify({ sender: senderPayload(), body, mentions: mentionsFor(work) }),
     });
     state.draft.body = '';
     await loadGroups();
@@ -573,7 +591,7 @@ async function loadProjects(client) {
     state.projects = {
       client,
       list,
-      reason: list.length > 0 ? null : body.reason ?? '未能从客户端读取项目列表',
+      reason: list.length > 0 ? null : (body.reason ?? '未能从客户端读取项目列表'),
       loading: false,
     };
   } catch (error) {
@@ -596,7 +614,6 @@ function bindComposer() {
     };
   }
   for (const [id, key] of [
-    ['#target-select', 'target'],
     ['#model-input', 'model'],
     ['#reasoning-select', 'reasoning'],
   ]) {
@@ -606,14 +623,21 @@ function bindComposer() {
         state.draft[key] = element.value;
       };
   }
-  const target = $('#target-select');
-  if (target) {
-    target.onchange = () => {
+  $$('#target-chips .chip-toggle').forEach((chip) => {
+    chip.onclick = () => {
       readDraft();
-      // Folders belong to one client, so switching the target reloads the list.
-      void loadProjects(state.draft.target);
+      const id = chip.dataset.target;
+      const on = state.draft.targets.includes(id);
+      state.draft.targets = on
+        ? state.draft.targets.filter((item) => item !== id)
+        : [...state.draft.targets, id];
+      // At least one target keeps the composer meaningful.
+      if (state.draft.targets.length === 0) state.draft.targets = [id];
+      const primary = state.draft.targets[0];
+      if (state.projects.client !== primary) void loadProjects(primary);
+      renderConversation();
     };
-  }
+  });
   const projectSelect = $('#path-select');
   if (projectSelect) {
     projectSelect.onchange = () => {

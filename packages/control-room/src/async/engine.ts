@@ -265,11 +265,16 @@ export class AsyncEngine {
           stages: input.stages,
         })}`;
 
-    const created = await this.store.mutate((state) => {
+    const created = await this.store.mutate<{
+      receipt: SubmitReceipt;
+      created: boolean;
+      stageId: string;
+      dispatch: string[];
+    }>((state) => {
       const existing = state.idempotency[idempotencyKey];
       if (existing) {
         return {
-          result: { receipt: existing.receipt, created: false, stageId: existing.stageId },
+          result: { receipt: existing.receipt, created: false, stageId: existing.stageId, dispatch: [] },
           events: [],
         };
       }
@@ -353,9 +358,18 @@ export class AsyncEngine {
 
       const first = stages[0];
       if (!first) throw new AsyncValidationError([{ field: 'stages', message: '至少需要一个阶段' }]);
-      const run = createRun(first, at, 1);
-      first.runIds.push(run.id);
-      state.runs[run.id] = run;
+      // Every stage without a dependency starts now. A message that addresses three
+      // agents is three parallel stages, not one — otherwise two of the three would
+      // wait for a dependency that never was declared.
+      const ready = stages.filter((stage) => stage.dependsOn.length === 0);
+      const readyRuns: Run[] = [];
+      for (const stage of ready) {
+        const stageRun = createRun(stage, at, 1);
+        stage.runIds.push(stageRun.id);
+        state.runs[stageRun.id] = stageRun;
+        readyRuns.push(stageRun);
+      }
+      const run = readyRuns[0] as Run;
 
       const submitMessage = addMessage(state, {
         topicId: topic.id,
@@ -391,7 +405,7 @@ export class AsyncEngine {
         origin: { ...input.origin },
         correlationId,
         stageIds: stages.map((stage) => stage.id),
-        runIds: [run.id],
+        runIds: readyRuns.map((item) => item.id),
         callbackIds: [],
         messageIds: [submitMessage.id],
         status: taskStatusFrom(stages, [run], [], at),
@@ -430,14 +444,28 @@ export class AsyncEngine {
       const events: JournalEvent[] = [
         { kind: 'task.submitted', message: receipt.reason ?? '', taskId, stageId: first.id, runId: run.id },
       ];
-      return { result: { receipt, created: true, stageId: first.id }, events };
+      return {
+        result: { receipt, created: true, stageId: first.id, dispatch: ready.map((stage) => stage.id) },
+        events,
+      };
     });
 
     if (!created.created) {
       return { ...created.receipt, idempotent: true };
     }
 
-    const receipt = await this.dispatchStage(created.receipt.taskId, created.stageId, created.receipt);
+    // Dispatch every ready stage; the receipt still describes the first one, which
+    // is what the caller needs to correlate the request.
+    let receipt = created.receipt;
+    for (const stageId of created.dispatch) {
+      const current =
+        stageId === created.stageId
+          ? receipt
+          : buildReceiptForStage(this.store, created.receipt.taskId, stageId);
+      if (!current) continue;
+      const dispatched = await this.dispatchStage(created.receipt.taskId, stageId, current);
+      if (stageId === created.stageId) receipt = dispatched;
+    }
     return receipt;
   }
 
