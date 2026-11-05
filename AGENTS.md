@@ -26,6 +26,13 @@ git push origin main  # NO!
 
 This ensures the user maintains control over what goes into the main branch.
 
+## 开发主线是 codex/hubozhi-dev，不要随手开新分支（用户要求，2026-11-05）
+
+- 日常开发直接在 `codex/hubozhi-dev` 上提交和推送；它是主开发分支，不是 `main`，不受上面"禁止推 main"的限制。
+- 只有确实需要并行、或要在别的目录同时跑一套时才开分支；开的时候说明理由，任务完成后立刻合回 `codex/hubozhi-dev` 并删除该分支。
+- 不要长期养着一堆分支和 worktree。一个分支的生命周期就是"一次任务"：合并、推送、删本地、删远程、移除 worktree。
+- 合并后必须清理：`git worktree remove --force` 前先确认目录里没有未提交改动；残留的 `node_modules` 若是软链接，只删链接本身。
+
 ## 每个最小可执行任务完成后提交并推送（用户要求，2026-10-27）
 
 - 每完成一个可独立执行、验证的最小任务，就立即提交并推送一次，不积攒到多个任务完成后再统一提交。
