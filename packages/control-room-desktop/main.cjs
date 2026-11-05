@@ -17,7 +17,7 @@
 'use strict';
 
 const { join, dirname, resolve } = require('node:path');
-const { writeSync, mkdirSync } = require('node:fs');
+const { writeSync, mkdirSync, appendFileSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
 const {
@@ -49,6 +49,27 @@ if (profilePath) {
   process.env.TMP = temporaryPath;
   process.env.TMPDIR = temporaryPath;
 }
+
+/**
+ * Leave a trace when the shell dies.
+ *
+ * A packaged app has no terminal: an unhandled rejection used to end the process
+ * with exit code 1 and no evidence. Both handlers log to the console and append to
+ * `crash.log` in the user-data folder, and they do not take the app down.
+ */
+function recordFailure(scope, error) {
+  const detail = error && error.stack ? error.stack : String(error);
+  console.error(`[应用] ${scope}：${detail}`);
+  try {
+    const file = process.env.RELAY_CRASH_LOG || join(app.getPath('userData'), 'crash.log');
+    appendFileSync(file, `[${new Date().toISOString()}] ${scope}: ${detail}\n`, 'utf8');
+  } catch {
+    // Logging must never be the reason the app fails.
+  }
+}
+
+process.on('unhandledRejection', (reason) => recordFailure('未处理的异步错误', reason));
+process.on('uncaughtException', (error) => recordFailure('未捕获的异常', error));
 
 const APP_ROOT = __dirname;
 const ICON = join(APP_ROOT, 'assets', 'icon.png');
