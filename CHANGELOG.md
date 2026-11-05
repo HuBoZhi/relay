@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@agent-relay/control-room-desktop`: reconnect to the configured workspace after Windows sign-in, retaining tray-only startup, the web address, and local profile paths without storing credentials in the startup command.
 
+- `relay-agent-connect`: preserve unified console/interface sign-in startup when reconfiguring individual desktop interfaces.
+
+- `scripts/desktop-relay`: reuse saved desktop sessions after client restarts and correlate ZCode replies with the current task, even when WorkBuddy automatically changes its session title.
+
 ### Added
 
 - `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.
@@ -42,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@agent-relay/control-room-desktop`: Windows unified-start scripts can keep the console under an independent supervisor, restart it after process exit, and expose an explicit stop command and lifecycle log.
 
 - `@agent-relay/control-room-desktop`: start desktop Relay interfaces and the tray console together through one Windows sign-in entry, sharing the existing workspace configuration.
+
+- `relay-agent-connect`: share a global desktop Relay skill across local agents, select project/model sessions, and configure ZCode/WorkBuddy/Factory loopback APIs at sign-in and manual startup; Factory's launcher follows installed version updates.
+
+- `scripts/desktop-relay`: connect Factory desktop to Relay with dedicated sessions, Markdown tasks, and results correlated to the exact native turn; support `-Client factory` in both local entry points.
+
+- `scripts/desktop-relay`: call WorkBuddy and ZCode desktop sessions through Relay Actions and local CDP-to-IPC/SDK adapters, returning correlated results without mouse, keyboard, or DOM automation.
 
 - `@agent-relay/control-room`: a read-only collaboration control room. `node packages/control-room/dist/cli.js` serves a loopback-only web console that shows channels, evidenced agent work state, host placement, and live message flow. Credentials stay in the local process; the browser only receives view models. `--demo` runs the same interface on built-in Chinese demo data.
 
