@@ -641,11 +641,40 @@ function renderDesktopSettings() {
     </form>
     <div class="bridge-block">
       <div class="card-head" style="margin:12px 0 8px">
-        <h3 style="margin:0;font-size:13px">派发桥接</h3>
-        <span class="hint">把 @ 派活交给本机客户端；未注册时任务停在已排队</span>
+        <h3 style="margin:0;font-size:13px">内置派发桥接</h3>
+        <span class="hint">随应用启动和停止，不需要另外开进程</span>
+      </div>
+      ${renderBuiltInBridge()}
+      <div class="form-row" style="margin-top:10px">
+        ${['zcode', 'workbuddy', 'factory']
+          .map((client) => {
+            const checked = (settings.connectors || []).includes(client);
+            return `<label class="checkbox"><input type="checkbox" name="connector" value="${client}"${checked ? ' checked' : ''} /> ${esc(CLIENT_LABELS[client] || client)}</label>`;
+          })
+          .join('')}
+      </div>
+      <p class="hint-text">勾选后重启应用生效；未勾选的客户端，派活会停在「已排队」。</p>
+    </div>
+    <div class="bridge-block">
+      <div class="card-head" style="margin:12px 0 8px">
+        <h3 style="margin:0;font-size:13px">外部桥接</h3>
+        <span class="hint">自己另起的桥接，可选</span>
       </div>
       ${renderBridges(settings.bridges || [])}
     </div>
+  </div>`;
+}
+
+function renderBuiltInBridge() {
+  const bridge = state.desktop.bridge;
+  if (!bridge) {
+    return '<p class="hint-text">内置桥接未运行（应用未启用连接器，或启动失败）。</p>';
+  }
+  const tone = bridge.running ? 'ok' : 'bad';
+  return `<div class="bridge-row">
+    <span class="badge" data-tone="${tone}">${bridge.running ? '运行中' : '未运行'}</span>
+    <span class="mono">${esc(bridge.url || '—')}</span>
+    <span class="muted">端口 ${esc(String(bridge.port ?? '—'))}</span>
   </div>`;
 }
 
@@ -1077,6 +1106,14 @@ function wire(root) {
       const settings = (state.desktop?.settings?.bridges || []).slice();
       settings.splice(Number(button.dataset.removeBridge), 1);
       await patchDesktop({ bridges: settings }, '桥接已移除');
+    };
+  });
+  $$('[name="connector"]', root).forEach((box) => {
+    box.onchange = async () => {
+      const connectors = $$('[name="connector"]', root)
+        .filter((item) => item.checked)
+        .map((item) => item.value);
+      await patchDesktop({ connectors }, '连接器已更新');
     };
   });
   const addBridge = $('#add-bridge', root);

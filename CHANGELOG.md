@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@agent-relay/control-room-desktop`: the dispatch bridge ships inside the app. It is started and stopped with the app (one icon, one quit), configured from Settings → 内置派发桥接, and `relay-dispatch-bridge` remains available for headless installs.
+
 - `@agent-relay/control-room-desktop`: the window opens on the group chat instead of the observer graph, and the menu and tray gained a 群聊 entry; group results raise a notification that deep-links to the conversation.
 
 - `@agent-relay/control-room-desktop`: closing the window now quits the app and stops its engine, subscription, and port; "close to tray" is an explicit setting, and the tray gained "缩小到托盘" and task-workspace entries.

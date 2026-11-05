@@ -14,8 +14,6 @@
     "desktop": "npm run start -w @agent-relay/control-room-desktop",
     "bridge": "node packages/dispatch-bridge/src/cli.mjs",
     "mcp": "node packages/relay-mcp/src/cli.mjs",
-    "bridge": "node packages/dispatch-bridge/src/cli.mjs",
-    "mcp": "node packages/relay-mcp/src/cli.mjs",
     "desktop:package": "npm run package:win -w @agent-relay/control-room-desktop",
     "build:packages": "npm run build:core",
     "build:packages:watch": "echo 'Package watch build was removed with the simplified core surface. Use package-specific watch commands instead.'",

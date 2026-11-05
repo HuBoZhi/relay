@@ -10,6 +10,9 @@
 import { describeConfig, resolveBridgeConfig, USAGE } from './config.mjs';
 import { loadDrivers } from './drivers.mjs';
 import { startBridge } from './server.mjs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { BridgeStore } from './store.mjs';
 
 export async function main(argv = process.argv.slice(2)) {
@@ -57,5 +60,6 @@ export async function main(argv = process.argv.slice(2)) {
   process.on('SIGTERM', () => void shutdown());
 }
 
-const invokedDirectly = process.argv[1]?.replace(/\\/g, '/').endsWith('/cli.mjs') === true;
+const invokedDirectly =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirectly) void main();

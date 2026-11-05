@@ -16,6 +16,7 @@ import { build } from 'esbuild';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = join(HERE, '..');
 const CONTROL_ROOM = join(PACKAGE_ROOT, '..', 'control-room');
+const DISPATCH_BRIDGE = join(PACKAGE_ROOT, '..', 'dispatch-bridge');
 const DIST = join(PACKAGE_ROOT, 'dist');
 const ASSETS = join(PACKAGE_ROOT, 'assets');
 
@@ -77,6 +78,25 @@ async function main() {
     },
   });
   if (result.errors.length > 0) throw new Error('服务端打包失败');
+
+  // The bridge ships inside the app and is started by the app. One icon, one
+  // installer: the process boundary exists so a hung client cannot freeze the
+  // window, not so the user has something extra to launch.
+  const bridge = await build({
+    entryPoints: [join(DISPATCH_BRIDGE, 'src', 'cli.mjs')],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node20',
+    outfile: join(DIST, 'bridge.mjs'),
+    external: ['electron'],
+    legalComments: 'none',
+    logLevel: 'warning',
+    banner: {
+      js: '// 由 scripts/build.mjs 生成：本机派发桥接打包产物，请勿手工修改。',
+    },
+  });
+  if (bridge.errors.length > 0) throw new Error('桥接打包失败');
 
   await cp(join(CONTROL_ROOM, 'web'), join(DIST, 'web'), { recursive: true });
   // The prototype-only licence file is not part of the runtime.

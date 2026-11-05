@@ -1,2 +1,5 @@
 packages/cli/src/cli/commands/integration-cleanup-journal.ts text diff
 packages/cli/src/cli/commands/fleet-agent.ts text diff
+
+# ESM entry points keep LF: a CRLF shebang breaks test-time transforms.
+*.mjs text eol=lf

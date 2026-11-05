@@ -15,7 +15,7 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(HERE, 'server.mjs');
@@ -244,7 +244,8 @@ export async function main(argv = process.argv.slice(2)) {
   process.exitCode = command ? 1 : 0;
 }
 
-const invokedDirectly = process.argv[1]?.replace(/\\/g, '/').endsWith('/cli.mjs') === true;
+const invokedDirectly =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirectly) {
   main().catch((error) => {
     console.error(error.message);

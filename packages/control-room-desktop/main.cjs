@@ -16,7 +16,7 @@
 
 'use strict';
 
-const { join, dirname } = require('node:path');
+const { join, dirname, resolve } = require('node:path');
 const { writeSync, mkdirSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
@@ -66,12 +66,14 @@ let startRoom = null;
 let probe = null;
 let probeTasks = null;
 let loadServerModule = null;
+let startManagedBridge = null;
 let appMenuModel = [];
 let MENU_ACTIONS = new Set();
 let settingsApi = null;
 
 let room = null;
 let engine = null;
+let managedBridge = null;
 let unsubscribeEngine = null;
 let settings = null;
 let settingsFile = null;
@@ -104,13 +106,15 @@ function say(line) {
 }
 
 async function loadHelpers() {
-  const [configModule, roomModule, trayModule, menuModule, settingsModule] = await Promise.all([
+  const [configModule, roomModule, trayModule, menuModule, settingsModule, bridgeModule] = await Promise.all([
     import('./lib/config.mjs'),
     import('./lib/room-service.mjs'),
     import('./lib/tray-menu.mjs'),
     import('./lib/app-menu.mjs'),
     import('./lib/settings.mjs'),
+    import('./lib/bridge-process.mjs'),
   ]);
+  startManagedBridge = bridgeModule.startManagedBridge;
   MENU_ACTIONS = new Set(menuModule.MENU_ACTIONS);
   appMenuModel = menuModule.buildAppMenu({ isPackaged: app.isPackaged });
   buildTrayMenu = trayModule.buildTrayMenu;
@@ -497,6 +501,9 @@ function settingsView() {
     version: app.getVersion(),
     packaged: app.isPackaged,
     loginAtStartup: loginItemEnabled(),
+    bridge: managedBridge
+      ? { running: Boolean(managedBridge.url), url: managedBridge.url, port: managedBridge.port, managed: true }
+      : null,
   };
 }
 
@@ -549,22 +556,51 @@ function registerShortcuts() {
 
 async function startEngine() {
   const serverModule = await loadServerModule();
-  const adapters = (settings.bridges || []).map(
-    (bridge) =>
-      new serverModule.HttpBridgeAdapter({
-        client: bridge.client,
-        baseUrl: bridge.url,
-      })
-  );
+  // Adapters are registered after the local server is up: the built-in bridge
+  // needs the engine's real URL, and that is only known once it bound a port.
   engine = new serverModule.AsyncEngine({
     ...(settings.dataRoot ? { dataRoot: settings.dataRoot } : {}),
-    adapters,
     log: (message) => console.log(message),
   });
   await engine.open();
   unsubscribeEngine = engine.subscribe(notifyFromEvent);
   for (const warning of engine.warnings) console.warn(`[任务] ${warning}`);
   console.log(`[任务] 引擎已启动 · 数据目录 ${engine.dataRoot}`);
+}
+
+/**
+ * Bring up the built-in bridge and point the engine at it.
+ *
+ * One app, not two: the bridge is a child of this process. It is a child rather
+ * than in-process code so a wedged client cannot freeze the window, but the user
+ * never starts, watches, or stops it separately.
+ */
+async function startBridges() {
+  const serverModule = await loadServerModule();
+  if (engine && (settings.connectors || []).length > 0) {
+    managedBridge = await startManagedBridge({
+      engineUrl: room.url,
+      // Task data and bridge data sit side by side under the same data root.
+      dataDir: resolve(engine.dataRoot, '..', 'bridge'),
+      desktopNativeDir: settings.desktopNativeDir || 'D:/Programs/AgentRelay/desktop-native',
+      preferredPort: settings.bridgePort || 7901,
+      log: (line) => console.log(line),
+    });
+  }
+  if (!engine) return;
+  const registered = new Set();
+  if (managedBridge && managedBridge.url) {
+    for (const client of settings.connectors || []) {
+      engine.registerAdapter(new serverModule.HttpBridgeAdapter({ client, baseUrl: managedBridge.url }));
+      registered.add(client);
+    }
+  }
+  for (const bridge of settings.bridges || []) {
+    if (!bridge?.url || registered.has(bridge.client)) continue;
+    engine.registerAdapter(new serverModule.HttpBridgeAdapter({ client: bridge.client, baseUrl: bridge.url }));
+    registered.add(bridge.client);
+  }
+  if (registered.size > 0) console.log(`[桥接] 已注册客户端：${[...registered].join('、')}`);
 }
 
 async function start() {
@@ -604,6 +640,7 @@ async function start() {
   }
 
   console.log(`[控制中心] 已启动 ${room.url} · ${room.mode}${engine ? ' · 任务引擎已挂载' : ''}`);
+  await startBridges();
   // No native menu bar: the page renders the menu in the console's own style.
   Menu.setApplicationMenu(null);
   registerIpc();
@@ -624,6 +661,7 @@ async function start() {
     say(`[冒烟] 托盘菜单：${labels}`);
     say(`[冒烟] 托盘提示：${lastTooltip}`);
     say(`[冒烟] 任务引擎：${engine ? engine.dataRoot : '未启用'}`);
+    say(`[冒烟] 内置桥接：${managedBridge && managedBridge.url ? managedBridge.url : '未启动'}`);
     app.quit();
     return;
   }
@@ -663,5 +701,8 @@ if (!locked) {
     if (room) void room.close();
     room = null;
     if (closingEngine) void closingEngine.close().catch(() => undefined);
+    const closingBridge = managedBridge;
+    managedBridge = null;
+    if (closingBridge) void closingBridge.stop().catch(() => undefined);
   });
 }

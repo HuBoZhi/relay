@@ -25,7 +25,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   closeToTray: false,
   notifications: true,
   loginAtStartup: false,
-  /** Local dispatch bridges: `{ client, url }`, loopback only. */
+  /** Clients the built-in bridge serves. Empty disables the bridge entirely. */
+  connectors: ['zcode', 'workbuddy'],
+  /** Port the built-in bridge prefers; it moves on if the port is taken. */
+  bridgePort: 7901,
+  /** Extra bridges the user runs themselves: `{ client, url }`, loopback only. */
   bridges: [],
 });
 
@@ -48,12 +52,18 @@ export function normalizeSettings(raw) {
         .map((entry) => ({ client: entry.client.trim(), url: entry.url.trim() }))
         .filter((entry) => entry.client.length > 0)
     : [];
+  const connectors = Array.isArray(source.connectors)
+    ? [...new Set(source.connectors.map((value) => String(value).trim()).filter(Boolean))]
+    : [...DEFAULT_SETTINGS.connectors];
+  const bridgePort = Number(source.bridgePort);
   return {
     version: SETTINGS_VERSION,
     dataRoot: typeof source.dataRoot === 'string' && source.dataRoot.trim() ? source.dataRoot.trim() : null,
     closeToTray: source.closeToTray === true,
     notifications: source.notifications !== false,
     loginAtStartup: source.loginAtStartup === true,
+    connectors,
+    bridgePort: Number.isInteger(bridgePort) && bridgePort >= 1024 && bridgePort <= 65535 ? bridgePort : 7901,
     bridges,
   };
 }
@@ -93,6 +103,13 @@ export function mergeSettings(current, patch) {
   if ('closeToTray' in patch) next.closeToTray = patch.closeToTray === true;
   if ('notifications' in patch) next.notifications = patch.notifications !== false;
   if ('loginAtStartup' in patch) next.loginAtStartup = patch.loginAtStartup === true;
+  if ('connectors' in patch && Array.isArray(patch.connectors)) {
+    next.connectors = [...new Set(patch.connectors.map((value) => String(value).trim()).filter(Boolean))];
+  }
+  if ('bridgePort' in patch) {
+    const port = Number(patch.bridgePort);
+    if (Number.isInteger(port) && port >= 1024 && port <= 65535) next.bridgePort = port;
+  }
   if ('bridges' in patch && Array.isArray(patch.bridges)) {
     next.bridges = normalizeSettings({ bridges: patch.bridges }).bridges;
   }
