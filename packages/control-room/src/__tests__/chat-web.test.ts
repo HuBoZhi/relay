@@ -186,6 +186,7 @@ describe('chat page', () => {
       return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(payload) };
     });
     window.eval(readFileSync(resolve(web, 'icons.js'), 'utf8'));
+    window.eval(readFileSync(resolve(web, 'dialog.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'chat.js'), 'utf8'));
     await settle();
     await settle();
@@ -288,6 +289,44 @@ describe('chat page', () => {
     expect(payload.mentions[0]?.model?.modelId).toBe('GLM-5.3-Flash');
     expect(payload.mentions[1]?.model?.modelId).toBe('gpt-5-codex');
     expect(payload.mentions[1]?.model?.reasoning).toBe('high');
+  });
+
+  it('asks for the group name in the page and creates the group', async () => {
+    // A desktop window has no native prompt: the ask has to live in the page, or
+    // the button answers with nothing and the click looks ignored.
+    const ui = await setup(route());
+    (ui.element('#new-group-button') as HTMLButtonElement).click();
+    await settle();
+
+    const card = ui.window.document.querySelector('.relay-ask') as HTMLElement | null;
+    expect(card).toBeTruthy();
+    const input = card?.querySelector('[data-ask-field="name"]') as HTMLInputElement;
+    const confirm = card?.querySelector('[data-ask-action="confirm"]') as HTMLButtonElement;
+
+    // An empty name is refused in the card, not silently ignored.
+    confirm.click();
+    await settle();
+    expect(card?.querySelector('.relay-ask-error')?.textContent).toContain('群名称');
+    expect(ui.calls.some((call) => call.url === '/api/groups' && call.init?.method === 'POST')).toBe(false);
+
+    input.value = '20261105-三联联调';
+    input.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+    confirm.click();
+    await settle();
+    await settle();
+
+    const posted = ui.calls.find((call) => call.url === '/api/groups' && call.init?.method === 'POST');
+    expect(posted).toBeTruthy();
+    const payload = JSON.parse(String(posted?.init?.body)) as { name: string; creator: { agentId: string } };
+    expect(payload.name).toBe('20261105-三联联调');
+    expect(payload.creator.agentId).toBe('codex');
+  });
+
+  it('never falls back to a native dialog, which a desktop window answers with null', () => {
+    for (const page of ['chat.js', 'tasks.js']) {
+      const source = readFileSync(resolve(web, page), 'utf8');
+      expect(source).not.toMatch(/window\.(prompt|confirm|alert)\s*\(/);
+    }
   });
 
   it('sends a plain message as an address, with no client and no project', async () => {

@@ -595,11 +595,27 @@ async function send(work) {
 
 async function reportResult(taskId) {
   if (!state.view) return;
-  const summary = window.prompt('这次的结果是什么？', '已完成');
-  if (summary === null) return;
-  const choice = window.prompt('结论：completed / failed / blocked', 'completed');
-  if (choice === null) return;
-  const outcome = ['completed', 'failed', 'blocked'].includes(choice.trim()) ? choice.trim() : 'completed';
+  const answer = await window.relayAsk({
+    title: '回报结果',
+    description: '结果会投递回发起这次派活的聊天。这里只写结果本身，不代表任务已被验收。',
+    fields: [
+      { name: 'summary', label: '这次的结果是什么', value: '已完成', required: true, multiline: true },
+      {
+        name: 'outcome',
+        label: '结论',
+        value: 'completed',
+        options: [
+          { value: 'completed', label: '完成（completed）' },
+          { value: 'failed', label: '失败（failed）' },
+          { value: 'blocked', label: '阻塞（blocked）' },
+        ],
+      },
+    ],
+    confirmLabel: '回报',
+  });
+  if (!answer) return;
+  const summary = answer.summary;
+  const outcome = ['completed', 'failed', 'blocked'].includes(answer.outcome) ? answer.outcome : 'completed';
   try {
     const result = await api(`/api/groups/${encodeURIComponent(state.view.group.id)}/results`, {
       method: 'POST',
@@ -615,12 +631,28 @@ async function reportResult(taskId) {
 }
 
 async function createGroup() {
-  const name = window.prompt('群名称（同时是主题名称）', '20261104-MediaDock-需求开发2');
-  if (!name || !name.trim()) return;
+  // A desktop window has no native prompt — the call returns null without
+  // drawing anything — so the name is asked for in the page instead.
+  const answer = await window.relayAsk({
+    title: '新建群（主题）',
+    description: '群名称同时也是主题名称。建好后在群里 @ 一个 Agent，就是给它派活。',
+    fields: [
+      {
+        name: 'name',
+        label: '群名称',
+        placeholder: '20261105-MediaDock-需求开发2',
+        hint: '命名习惯：日期-项目-主题',
+        required: true,
+      },
+    ],
+    confirmLabel: '建群',
+  });
+  if (!answer || !answer.name) return;
+  const name = answer.name;
   try {
     const view = await api('/api/groups', {
       method: 'POST',
-      body: JSON.stringify({ name: name.trim(), creator: senderPayload() }),
+      body: JSON.stringify({ name, creator: senderPayload() }),
     });
     await loadGroups();
     await openGroup(view.group.id);

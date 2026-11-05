@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room`: the group-chat page asks for a group name, a result, a cancel reason, and a callback chat id in its own dialog instead of the browser's native prompt, which a desktop window answers with `null` — 「新建群（主题）」, result reporting, task cancel, and chat rebinding no longer look ignored.
+
 - `@agent-relay/dispatch-bridge`: large CDP replies no longer drop the socket mid-handshake (Node's built-in WebSocket failed to inflate them), so ZCode sessions initialise again and a dispatch can reach the client.
 
 - The dispatch form no longer demands a project ID: the bridge never needed one, and the folder path is what the client resolves against. The ID is filled from the client's own project list and reported back on the receipt.

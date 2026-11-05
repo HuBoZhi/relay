@@ -1158,8 +1158,15 @@ function wire(root) {
 
   $$('[data-cancel]', root).forEach((button) => {
     button.onclick = async () => {
-      const reason = window.prompt('取消原因（可留空）', '用户取消');
-      if (reason === null) return;
+      const answer = await window.relayAsk({
+        title: '取消任务',
+        description: '取消后晚到的回传只会记录状态，不会再改变任务的结论。',
+        fields: [{ name: 'reason', label: '取消原因（可留空）', value: '用户取消' }],
+        confirmLabel: '取消任务',
+        cancelLabel: '返回',
+      });
+      if (!answer) return;
+      const reason = answer.reason;
       try {
         await api(`/api/async/tasks/${encodeURIComponent(button.dataset.cancel)}/cancel`, {
           method: 'POST',
@@ -1199,8 +1206,21 @@ function wire(root) {
   $$('[data-rebind]', root).forEach((button) => {
     button.onclick = async () => {
       const [taskId, stageId] = String(button.dataset.rebind).split('|');
-      const chatId = window.prompt('新的回传聊天 ID', state.detail?.task?.origin?.chatId || '');
-      if (!chatId) return;
+      const answer = await window.relayAsk({
+        title: '重新绑定回传聊天',
+        description: '这一阶段的回传会投递到下面这个聊天 ID。',
+        fields: [
+          {
+            name: 'chatId',
+            label: '新的回传聊天 ID',
+            value: state.detail?.task?.origin?.chatId || '',
+            required: true,
+          },
+        ],
+        confirmLabel: '重新绑定',
+      });
+      if (!answer || !answer.chatId) return;
+      const chatId = answer.chatId;
       try {
         await api(
           `/api/async/tasks/${encodeURIComponent(taskId)}/stages/${encodeURIComponent(stageId)}/callback`,

@@ -1,0 +1,167 @@
+/* In-page asks (see dialog.js): the same card in a browser tab and a desktop window. */
+
+.relay-ask-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #02070cb8;
+  backdrop-filter: blur(5px);
+  animation: relay-ask-fade 0.14s ease-out;
+}
+
+.relay-ask {
+  width: min(430px, 100%);
+  max-height: min(80dvh, 560px);
+  overflow: auto;
+  padding: 22px 24px 18px;
+  border: 1px solid #3d545f;
+  border-radius: 12px;
+  background: #121d25;
+  box-shadow: 0 28px 90px #000c;
+  animation: relay-ask-in 0.18s ease-out;
+}
+
+.relay-ask-head h2 {
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+.relay-ask-head p {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.relay-ask-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.relay-ask-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.relay-ask-field > span {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: #7b8b96;
+}
+
+.relay-ask-field input,
+.relay-ask-field select,
+.relay-ask-field textarea {
+  width: 100%;
+  padding: 0 10px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d141a;
+  color: var(--text);
+  font-size: 12.5px;
+  outline-offset: 2px;
+}
+
+.relay-ask-field textarea {
+  height: auto;
+  min-height: 74px;
+  padding: 9px 10px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.relay-ask-field input:focus,
+.relay-ask-field select:focus,
+.relay-ask-field textarea:focus {
+  border-color: color-mix(in srgb, var(--cyan) 50%, var(--line));
+}
+
+/* The page's focus ring never covered a textarea; without this the browser's
+   own white ring is the only thing telling you where you are. */
+.relay-ask-field textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--cyan) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* Two classes so a field hint outranks the `.relay-ask-field > span` label rule. */
+.relay-ask-field .relay-ask-hint {
+  display: block;
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: #6d7f8c;
+}
+
+.relay-ask-error {
+  margin-top: 12px;
+  font-size: 10.5px;
+  color: #e0796d;
+}
+
+.relay-ask-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #223440;
+}
+
+.relay-ask-keys {
+  margin-right: auto;
+  font: 9px var(--mono);
+  color: #65828e;
+}
+
+.relay-ask-button {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #16222b;
+  color: #cddde5;
+  font-size: 12px;
+}
+
+.relay-ask-button:hover {
+  background: #1d2c36;
+}
+
+.relay-ask-confirm {
+  border-color: transparent;
+  background: var(--cyan);
+  color: #05262a;
+  font-weight: 600;
+}
+
+.relay-ask-confirm:hover {
+  background: #7fefe7;
+}
+
+@keyframes relay-ask-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes relay-ask-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
