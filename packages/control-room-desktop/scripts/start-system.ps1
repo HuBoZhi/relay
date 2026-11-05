@@ -1,4 +1,4 @@
-param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelayControlRoom')
+param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelayControlRoom',[switch]$Background)
 $ErrorActionPreference='Stop'
 $stateFile=Join-Path $RuntimeRoot 'data/workspace.private.json'
 if(!(Test-Path -LiteralPath $stateFile)){throw 'Existing Relay workspace state is required; no new workspace will be created'}
@@ -19,10 +19,22 @@ try{
     }catch{$steps+=@{client=$client;status='startup_error';error=$_.Exception.Message}}
   }
   $running=Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -ieq $record.installedExecutable -and $_.CommandLine -notmatch '--type='}
+  # Login startup stays a silent tray resident; a manual launch (the Start menu
+  # shortcut) opens the window, because that is what clicking an app icon means.
+  $consoleArgs=$record.arguments
+  if($Background){$consoleArgs=$consoleArgs+' --no-window'}
   $consolePid=if($running){@($running)[0].ProcessId}else{$null}
   if(!$running){
-    $running=Start-Process -FilePath $record.installedExecutable -ArgumentList $record.arguments -WindowStyle Hidden -RedirectStandardOutput (Join-Path $ConsoleDir 'logs/unified.stdout.log') -RedirectStandardError (Join-Path $ConsoleDir 'logs/unified.stderr.log') -PassThru
+    $launch=@{FilePath=$record.installedExecutable;ArgumentList=$consoleArgs;PassThru=$true;
+      RedirectStandardOutput=(Join-Path $ConsoleDir 'logs/unified.stdout.log');
+      RedirectStandardError=(Join-Path $ConsoleDir 'logs/unified.stderr.log')}
+    if($Background){$launch.WindowStyle='Hidden'}
+    $running=Start-Process @launch
     $consolePid=$running.Id
+  }elseif(!$Background){
+    # Already resident from login: a second launch is the app's own signal to
+    # raise its window, so the icon never lands on a hidden console.
+    Start-Process -FilePath $record.installedExecutable -ArgumentList $consoleArgs | Out-Null
   }
   $health=$null
   for($attempt=0;$attempt -lt 20 -and !$health;$attempt++){
