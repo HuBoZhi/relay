@@ -394,12 +394,6 @@ function renderComposer() {
         }
         ${issue('mentions[0].project.path')}
       </div>
-      <div class="field id">
-        <label for="project-id-static">项目 ID</label>
-        <span class="static mono" id="project-id-static" title="${esc(draft.projectId)}">${esc(
-          draft.projectId || '选择项目后自动带出'
-        )}</span>
-      </div>
     </div>
     <div class="composer-actions">
       <button class="button-primary" type="button" id="dispatch-button">@ 派活</button>
@@ -640,16 +634,9 @@ function bindComposer() {
   });
   const projectSelect = $('#path-select');
   if (projectSelect) {
-    projectSelect.onchange = () => {
-      readDraft();
-      // The id is read-only, so update it in place instead of re-rendering the
-      // whole conversation (which would steal focus from the select).
-      const box = $('#project-id-static');
-      if (box) {
-        box.textContent = state.draft.projectId || '选择项目后自动带出';
-        box.title = state.draft.projectId;
-      }
-    };
+    // The project id is derived from the selection and sent with the request; it is
+    // not something the user needs to read, so it stays out of the composer.
+    projectSelect.onchange = () => readDraft();
   }
   const dispatch = $('#dispatch-button');
   if (dispatch) dispatch.onclick = () => void send(true);
