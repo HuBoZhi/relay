@@ -1,0 +1,37 @@
+{
+  "id": "compact_2ged2k2flaum",
+  "version": 1,
+  "type": "compacted",
+  "compactedAt": "2026-11-05T15:23:50.313Z",
+  "sourceTrajectories": [
+    "traj_m1roycbomx51"
+  ],
+  "dateRange": {
+    "start": "2026-11-05T15:14:58.500Z",
+    "end": "2026-11-05T15:23:49.628Z"
+  },
+  "summary": {
+    "totalDecisions": 1,
+    "totalEvents": 1,
+    "uniqueAgents": [
+      "default"
+    ]
+  },
+  "decisionGroups": [
+    {
+      "category": "api",
+      "decisions": [
+        {
+          "question": "Deploy the contents of the newly generated archive into the existing expanded app layout",
+          "chosen": "Deploy the contents of the newly generated archive into the existing expanded app layout",
+          "reasoning": "Preserves the installed app layout, profile and startup configuration while ensuring the deployed program is exactly the generated package; verified key file SHA256 integrity and live API endpoints.",
+          "fromTrajectory": "traj_m1roycbomx51"
+        }
+      ]
+    }
+  ],
+  "keyLearnings": [],
+  "keyFindings": [],
+  "filesAffected": [],
+  "commits": []
+}
