@@ -848,3 +848,59 @@ body {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* @ picker above the composer, and tighter columns. */
+.body-wrap {
+  position: relative;
+}
+
+.mention-menu {
+  position: absolute;
+  left: 0;
+  /* Drop up: the composer sits at the bottom of the window. */
+  bottom: calc(100% + 6px);
+  width: min(320px, 100%);
+  z-index: 30;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #101a22;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+.mention-menu[hidden] {
+  display: none;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: #182530;
+}
+
+.mention-flag {
+  font-size: 10.5px;
+  color: #6d7f8c;
+}
+
+.participant {
+  grid-template-columns: 132px minmax(0, 1fr) 92px 52px;
+}
+
+.field.project {
+  flex: 0 1 420px;
+  max-width: 460px;
+}

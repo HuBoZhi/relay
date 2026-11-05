@@ -74,6 +74,8 @@ const state = {
     path: '',
     projectId: '',
   },
+  /** Open @ menu: { query, start, active } while typing a mention. */
+  mention: null,
   issues: [],
   engineError: null,
   loading: false,
@@ -374,7 +376,10 @@ function renderComposer() {
     .join('');
 
   return `<div class="composer">
-    <textarea id="body-input" placeholder="说点什么，或者 @ 一个 Agent 派活…">${esc(draft.body)}</textarea>
+    <div class="body-wrap">
+      <textarea id="body-input" placeholder="说点什么，或者 @ 一个 Agent 派活…">${esc(draft.body)}</textarea>
+      <div class="mention-menu" id="mention-menu" role="listbox" hidden></div>
+    </div>
     <div class="participants-block">
       <div class="participants-head">
         <span>@ 谁（每行一个 Agent，可各自选模型）</span>
@@ -384,7 +389,7 @@ function renderComposer() {
       ${issue('mentions[0].model')}
     </div>
     <div class="composer-row">
-      <div class="field grow${invalid('mentions[0].project.path')}">
+      <div class="field project${invalid('mentions[0].project.path')}">
         <label for="path-select">项目目录（本次消息共用）</label>
         ${
           projects.list.length > 0
@@ -618,17 +623,129 @@ async function loadProjects(client) {
   renderConversation();
 }
 
+/**
+ * Typing `@` opens the agent list.
+ *
+ * The list is what the composer already knows about — the built-in agents, marked
+ * when they are already in the message — so picking one both inserts the text and
+ * adds its row with that agent's default model.
+ */
+function mentionToken(input) {
+  const caret = input.selectionStart ?? input.value.length;
+  const before = input.value.slice(0, caret);
+  const match = /@([^\s@]*)$/.exec(before);
+  if (!match) return null;
+  return { query: match[1].toLowerCase(), start: caret - match[0].length };
+}
+
+function openMentionMenu() {
+  const body = $('#body-input');
+  const menu = $('#mention-menu');
+  if (!body || !menu) return;
+  const token = mentionToken(body);
+  if (!token) {
+    closeMentionMenu();
+    return;
+  }
+  const added = new Set(state.draft.participants.map((participant) => participant.target));
+  const matches = AGENTS.filter(
+    (agent) => agent.label.toLowerCase().includes(token.query) || agent.id.startsWith(token.query)
+  );
+  if (matches.length === 0) {
+    closeMentionMenu();
+    return;
+  }
+  state.mention = { ...token, active: 0 };
+  menu.innerHTML = matches
+    .map(
+      (
+        agent,
+        index
+      ) => `<button type="button" class="mention-item${index === 0 ? ' active' : ''}" data-agent="${agent.id}" role="option">
+        <span>${esc(agent.label)}</span>
+        ${added.has(agent.id) ? '<span class="mention-flag">已在列表</span>' : ''}
+      </button>`
+    )
+    .join('');
+  menu.hidden = false;
+  $$('.mention-item', menu).forEach((item) => {
+    item.onmousedown = (event) => {
+      // mousedown, not click: the textarea would blur first.
+      event.preventDefault();
+      applyMention(item.dataset.agent);
+    };
+  });
+}
+
+function closeMentionMenu() {
+  const menu = $('#mention-menu');
+  if (menu) menu.hidden = true;
+  state.mention = null;
+}
+
+function applyMention(agentId) {
+  const body = $('#body-input');
+  const agent = AGENTS.find((item) => item.id === agentId);
+  if (!body || !agent || !state.mention) return;
+  const caret = body.selectionStart ?? body.value.length;
+  const before = body.value.slice(0, state.mention.start);
+  const after = body.value.slice(caret);
+  const inserted = `@${agent.label} `;
+  state.draft.body = `${before}${inserted}${after}`;
+  if (!state.draft.participants.some((participant) => participant.target === agent.id)) {
+    state.draft.participants.push({ target: agent.id, ...AGENT_DEFAULTS[agent.id] });
+  }
+  closeMentionMenu();
+  renderConversation();
+  const restored = $('#body-input');
+  if (restored) {
+    restored.focus();
+    const position = before.length + inserted.length;
+    restored.setSelectionRange(position, position);
+  }
+}
+
 function bindComposer() {
   const body = $('#body-input');
   if (body) {
     body.oninput = () => {
       state.draft.body = body.value;
+      openMentionMenu();
     };
     body.onkeydown = (event) => {
+      const menu = $('#mention-menu');
+      const open = menu && !menu.hidden;
+      if (open) {
+        const items = $$('.mention-item', menu);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const current = items.findIndex((item) => item.classList.contains('active'));
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          const next = (current + delta + items.length) % items.length;
+          items.forEach((item, index) => item.classList.toggle('active', index === next));
+          state.mention = state.mention ? { ...state.mention, active: next } : null;
+          return;
+        }
+        if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          const active = items[state.mention?.active ?? 0];
+          if (active) applyMention(active.dataset.agent);
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeMentionMenu();
+          return;
+        }
+      }
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         void send(false);
       }
+    };
+    body.onblur = () => {
+      // Let a click on the menu land before closing it.
+      setTimeout(closeMentionMenu, 120);
     };
   }
 
