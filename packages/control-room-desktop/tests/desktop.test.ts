@@ -2,14 +2,12 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { writeFile } from 'node:fs/promises';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
 import { MENU_ACTIONS, buildAppMenu, menuActionIds } from '../lib/app-menu.mjs';
 import { DEFAULT_PORT, loginItemArgs, loginItemCommand, resolveConfig } from '../lib/config.mjs';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { buildTrayMenu, formatUpdatedAt, summarize, trayTooltip } from '../lib/tray-menu.mjs';
 import {
   DEFAULT_SETTINGS,
