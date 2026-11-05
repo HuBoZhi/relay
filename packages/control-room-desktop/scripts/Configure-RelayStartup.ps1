@@ -1,0 +1,104 @@
+param(
+  [ValidateSet('Configure','Check','Start')][string]$Action='Check',
+  [ValidateSet('zcode','workbuddy','factory')][string[]]$Client=@('zcode','workbuddy','factory'),
+  [string]$RuntimeRoot='D:\Programs\AgentRelay'
+)
+$ErrorActionPreference='Stop'
+$factoryRoot=Join-Path $env:LOCALAPPDATA 'Factory'
+$factoryLauncher=Join-Path $RuntimeRoot 'Start-RelayFactory.ps1'
+$windowsPowerShell=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+$factoryLauncherArgs='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$factoryLauncher+'"'
+$apps=@(
+  @{Key='zcode';Name='ZCode';Exe='C:\Program Files\ZCode\ZCode.exe';Port=19372;Pattern='/ZCode/resources/app\.asar/out/renderer/index\.html$'},
+  @{Key='workbuddy';Name='WorkBuddy';Exe='D:\Program Files\WorkBuddy\WorkBuddy.exe';Port=19371;Pattern='/WorkBuddy/resources/app\.asar/renderer/index\.html$'},
+  @{Key='factory';Name='Factory';Exe=(Join-Path $factoryRoot 'factory-desktop.exe');Port=19373;Process='factory-desktop';Pattern='/Factory/app-[\d.]+/resources/app\.asar/\.vite/renderer/main_window/index\.html$'}
+) | Where-Object Key -In $Client
+function Test-AppShortcut($shortcut,$app){
+  if($app.Key -ne 'factory'){return $shortcut.TargetPath -ieq $app.Exe}
+  return ($shortcut.TargetPath -imatch ('^'+[regex]::Escape($factoryRoot)+'\\(?:app-[\d.]+\\)?factory-desktop\.exe$')) -or
+    ($shortcut.TargetPath -ieq $windowsPowerShell -and $shortcut.Arguments.Contains('"'+$factoryLauncher+'"'))
+}
+$runKey='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$unifiedFile=Join-Path $RuntimeRoot 'data/unified-startup.json'
+$unifiedStartup=$false
+if(Test-Path -LiteralPath $unifiedFile){$unifiedStartup=(Get-Content -LiteralPath $unifiedFile -Raw|ConvertFrom-Json).enabled -eq $true}
+if($Action -eq 'Configure'){
+  $backup=Join-Path $RuntimeRoot ('data/startup-backup-'+[guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $backup -Force | Out-Null
+  $record=@{run=@{};environment=@{};shortcuts=@()}
+  $shell=New-Object -ComObject WScript.Shell
+  foreach($app in $apps){
+    $old=(Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).($app.Name)
+    $record.run[$app.Name]=$old
+    $args="--remote-debugging-port=$($app.Port) --remote-debugging-address=127.0.0.1"
+    $target=$app.Exe
+    if($app.Key -eq 'factory'){
+      if(!(Test-Path -LiteralPath $factoryLauncher)){throw 'Install Start-RelayFactory.ps1 before configuring Factory'}
+      $target=$windowsPowerShell;$args=$factoryLauncherArgs
+    }
+    # Keep original shortcut targets, icon, working directory, and unrelated arguments.
+    $taskbar=Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar'
+    $roots=@([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('CommonDesktopDirectory'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('CommonPrograms'),[Environment]::GetFolderPath('Startup'),$taskbar) | Where-Object {Test-Path -LiteralPath $_} | Select-Object -Unique
+    foreach($link in (Get-ChildItem -LiteralPath $roots -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue)){
+      $shortcut=$shell.CreateShortcut($link.FullName)
+      if(!(Test-AppShortcut $shortcut $app)){continue}
+      $copy=Join-Path $backup ([guid]::NewGuid().ToString('N')+'.lnk')
+      Copy-Item -LiteralPath $link.FullName -Destination $copy
+      $record.shortcuts+=@{path=$link.FullName;backup=$copy}
+      $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $backup 'before.json') -Encoding utf8
+      $shortcut.Arguments=($shortcut.Arguments -replace '(?i)--remote-debugging-(?:port|address)(?:=|\s+)\S+','').Trim()
+      $shortcut.Arguments=($shortcut.Arguments+' '+$args).Trim()
+      if($app.Key -eq 'factory'){$shortcut.TargetPath=$target;$shortcut.Arguments=$args}
+      try {$shortcut.Save()} catch {
+        # A per-user Start Menu shortcut shadows a protected machine shortcut.
+        $personal=Join-Path ([Environment]::GetFolderPath('Programs')) $link.Name
+        $existed=Test-Path -LiteralPath $personal
+        $s=$shell.CreateShortcut($personal)
+        if($existed -and !(Test-AppShortcut $s $app)){throw 'Existing user shortcut belongs to another application'}
+        $s.TargetPath=$target;$s.Arguments=$args;$s.IconLocation=$shortcut.IconLocation;$s.Save()
+        if(!$existed){$record.shortcuts+=@{path=$personal;created=$true}}
+      }
+    }
+    if($app.Key -eq 'workbuddy'){
+      $record.environment.WORKBUDDY_REMOTE_DEBUGGING_PORT=[Environment]::GetEnvironmentVariable('WORKBUDDY_REMOTE_DEBUGGING_PORT','User')
+      $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $backup 'before.json') -Encoding utf8
+      [Environment]::SetEnvironmentVariable('WORKBUDDY_REMOTE_DEBUGGING_PORT','19371','User')
+    }
+    # Run entries start each client with its loopback interface at sign-in.
+    if(!$unifiedStartup){New-ItemProperty -LiteralPath $runKey -Name $app.Name -Value ('"'+$target+'" '+$args) -PropertyType String -Force | Out-Null}
+  }
+  $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $backup 'before.json') -Encoding utf8
+  Write-Output "Configured shortcuts and sign-in startup. Backup: $backup"
+  if($unifiedStartup){Write-Output 'Sign-in startup is managed by Start-RelaySystem; no independent Run entry was created.'}
+}
+foreach($app in $apps){
+  $ready=$false
+  try {
+    $targets=Invoke-RestMethod -Uri "http://127.0.0.1:$($app.Port)/json/list" -TimeoutSec 3
+    # .NET Framework treats '?' in file URLs differently from modern .NET.
+    # Remove URL query/fragment before constructing the URI (also on PS 5.1).
+    $ready=@($targets | Where-Object {
+      $uri=[Uri]($_.url -replace '[?#].*$','')
+      $_.type -eq 'page' -and $uri.Scheme -eq 'file' -and !$uri.Host -and
+        [Uri]::UnescapeDataString($uri.AbsolutePath) -match $app.Pattern
+    }).Count -eq 1
+    if(!$ready){throw "Port $($app.Port) belongs to an unexpected application"}
+  } catch {if($_.Exception.Message -match 'unexpected application'){throw}}
+  if($ready){Write-Output "$($app.Name): ready on 127.0.0.1:$($app.Port)";continue}
+  $processName=if($app.Process){$app.Process}else{$app.Name}
+  if(Get-Process -Name $processName -ErrorAction SilentlyContinue){Write-Output "$($app.Name): restart_needed (running without interface)";continue}
+  if($Action -ne 'Start'){Write-Output "$($app.Name): stopped";continue}
+  if($app.Key -eq 'factory'){& $factoryLauncher -RuntimeRoot $RuntimeRoot;Write-Output 'Factory: started with Relay interface';continue}
+  $scratch=Join-Path 'D:\CodexTemp' ('relay-desktop-host-'+[guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $scratch | Out-Null
+  $keys=@('TEMP','TMP','TMPDIR','WORKBUDDY_REMOTE_DEBUGGING_PORT','ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT','ELECTRON_RUN_AS_NODE');$previous=@{}
+  foreach($key in $keys){$previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process')}
+  try {
+    $env:TEMP=$scratch;$env:TMP=$scratch;$env:TMPDIR=$scratch
+    $env:ELECTRON_RUN_AS_NODE=$null
+    $env:WORKBUDDY_REMOTE_DEBUGGING_PORT='19371';$env:ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT='1'
+    $p=Start-Process -FilePath $app.Exe -ArgumentList "--remote-debugging-port=$($app.Port)",'--remote-debugging-address=127.0.0.1' -WindowStyle Hidden -PassThru
+    @{app=$app.Name;pid=$p.Id;temporaryDirectory=$scratch;cleanup='Remove only after this application and children exit.'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RuntimeRoot "data/desktop-host-$($p.Id).json")
+    Write-Output "$($app.Name): started, pid=$($p.Id)"
+  } finally {foreach($key in $keys){[Environment]::SetEnvironmentVariable($key,$previous[$key],'Process')}}
+}

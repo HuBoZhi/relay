@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Desktop Relay discovers ZCode's current service bundle and connected services after client updates, and reports module import failures accurately.
 
+- `@agent-relay/control-room-desktop`: Windows PowerShell 5.1 recognizes desktop Relay interfaces whose file URLs include query parameters, avoiding false port-conflict reports.
+
 ### Added
 
 - `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.
@@ -28,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@agent-relay/control-room-desktop`: the app hosts the task engine on its own port, shows in-flight, awaiting-confirmation, and manual-callback counts in the tray, notifies on stage results and on callbacks the origin chat did not receive, and edits data root, close behaviour, notifications, launch-at-login, and loopback dispatch bridges from the task workspace.
 
 - `Invoke-CodexMailbox.ps1`: register a Relay inbox for an existing Codex desktop chat so other agents can address it by thread ID and Codex can actively read incoming messages.
+
+- `@agent-relay/control-room-desktop`: Windows login and desktop task entry points automatically start stopped clients and restart clients with missing Relay interfaces once, recording recovery results and reusing healthy clients.
 
 - `@agent-relay/control-room-desktop`: the Windows Factory launcher runs through an independent hidden host and writes client logs to files, allowing the Relay startup terminal to close.
 

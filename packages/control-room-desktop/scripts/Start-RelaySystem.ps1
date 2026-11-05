@@ -4,7 +4,7 @@ $stateFile=Join-Path $RuntimeRoot 'data/workspace.private.json'
 if(!(Test-Path -LiteralPath $stateFile)){throw 'Existing Relay workspace state is required; no new workspace will be created'}
 $record=Get-Content -LiteralPath (Join-Path $ConsoleDir 'startup-install-record.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if($record.workspaceStatePath -ine $stateFile){throw 'Console and desktop adapters must use the same workspace state file'}
-$temporaryPath=Join-Path $ConsoleDir 'data/temp'
+$temporaryPath=Join-Path 'D:\CodexTemp' ('relay-system-start-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temporaryPath -Force|Out-Null
 $keys=@('TEMP','TMP','TMPDIR','ELECTRON_RUN_AS_NODE','RELAY_CONTROL_ROOM_TOKEN','RELAY_WORKSPACE_KEY','RELAY_API_KEY');$previous=@{}
 foreach($key in $keys){$previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process')}
@@ -14,7 +14,7 @@ try{
   $env:RELAY_CONTROL_ROOM_TOKEN=$null;$env:RELAY_WORKSPACE_KEY=$null;$env:RELAY_API_KEY=$null
   foreach($client in @('zcode','workbuddy','factory')){
     try{
-      $output=(& (Join-Path $RuntimeRoot 'Configure-RelayStartup.ps1') -Action Start -Client $client -RuntimeRoot $RuntimeRoot | Out-String).Trim()
+      $output=(& (Join-Path $RuntimeRoot 'Ensure-RelayClient.ps1') -Client $client -RuntimeRoot $RuntimeRoot | Out-String).Trim()
       $steps+=@{client=$client;status=$output}
     }catch{$steps+=@{client=$client;status='startup_error';error=$_.Exception.Message}}
   }
@@ -31,4 +31,10 @@ try{
   $steps | ForEach-Object {Write-Output ($_.client+': '+$_.status)}
   Write-Output 'Relay system console: http://127.0.0.1:4320'
   if(!$health){throw 'Relay console did not become ready; inspect console-service-status.json and console logs'}
-}finally{foreach($key in $keys){[Environment]::SetEnvironmentVariable($key,$previous[$key],'Process')}}
+}finally{
+  foreach($key in $keys){[Environment]::SetEnvironmentVariable($key,$previous[$key],'Process')}
+  $resolved=(Resolve-Path -LiteralPath $temporaryPath).Path
+  if($resolved -eq $temporaryPath -and $resolved.StartsWith('D:\CodexTemp\relay-system-start-',[StringComparison]::OrdinalIgnoreCase) -and !((Get-Item -LiteralPath $resolved).Attributes -band [IO.FileAttributes]::ReparsePoint)){
+    Remove-Item -LiteralPath $resolved -Recurse -Force
+  }
+}
