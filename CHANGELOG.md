@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/dispatch-bridge`: large CDP replies no longer drop the socket mid-handshake (Node's built-in WebSocket failed to inflate them), so ZCode sessions initialise again and a dispatch can reach the client.
+
+- The dispatch form no longer demands a project ID: the bridge never needed one, and the folder path is what the client resolves against. The ID is filled from the client's own project list and reported back on the receipt.
+
 - Desktop Relay places ZCode tasks in the matching desktop project, starts in execution mode, preserves task names, and surfaces confirmation or interruption instead of treating them as progress or completion.
 
 - Desktop Relay discovers ZCode's current service bundle and connected services after client updates, and reports module import failures accurately.
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/desktop-relay`: reuse saved desktop sessions after client restarts and correlate ZCode replies with the current task, even when WorkBuddy automatically changes its session title.
 
 ### Added
+
+- `@agent-relay/control-room`: the dispatch form lists the projects each client already has configured and fills the project ID from the chosen folder (`GET /api/async/projects`, bridged to the client's own project list). When a client cannot be asked, the form says why and accepts a folder on its own.
 
 - `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.
 

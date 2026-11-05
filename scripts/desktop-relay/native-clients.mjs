@@ -117,6 +117,25 @@ export class ZCodeDesktop {
     return result.result?.value;
   }
 
+  /**
+   * Projects the app already has configured.
+   *
+   * The id is an internal handle a person never types; the path is what they
+   * actually know. Callers pick a path and carry the id along.
+   */
+  async listProjects() {
+    const projects = await this.call('projectService', 'readProjects', {});
+    if (!Array.isArray(projects)) return [];
+    return projects
+      .filter(project => !project.deleted && project.hostId === 'local')
+      .map(project => ({
+        id: project.id,
+        name: project.name ?? project.roots?.[0]?.rootPath ?? project.id,
+        path: project.roots?.[0]?.rootPath ?? null,
+      }))
+      .filter(project => project.id && project.path);
+  }
+
   async createSession() {
     const canonical = path => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
     const projects = await this.call('projectService', 'readProjects', {});
@@ -127,6 +146,9 @@ export class ZCodeDesktop {
     // ZCode uses the stored root string as a workspace identity. Preserve it,
     // even when another slash spelling points to the same physical directory.
     if (project) this.workspace = project.roots.find(root => canonical(root.rootPath) === canonical(this.workspace)).rootPath;
+    // The caller may only know the folder. Record the handle it maps to, so the
+    // dispatch receipt can carry the id back instead of an empty field.
+    this.projectId = project?.id ?? null;
     const task = await this.call('zcodeTaskService', 'createTask', {
       workspacePath: this.workspace, mode: 'build', v4Create: true, mcpServers: [],
       modelSelection: this.model ?? { providerId: 'account:bigmodel-individual-coding-plan', modelId: 'GLM-5.3-Flash', options: { reasoningLevel: 'high' } },

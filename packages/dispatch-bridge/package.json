@@ -11,6 +11,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
   "scripts": {
     "start": "node src/cli.mjs",
     "test": "vitest run --root ../.. packages/dispatch-bridge/"

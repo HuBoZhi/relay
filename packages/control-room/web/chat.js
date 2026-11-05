@@ -69,6 +69,8 @@ const state = {
   issues: [],
   engineError: null,
   loading: false,
+  /** Configured projects per client, read from the client itself. */
+  projects: { client: null, list: [], reason: null, loading: false },
 };
 
 /* ------------------------------------------------------------------ helpers */
@@ -326,6 +328,11 @@ function renderMessage(message) {
 
 function renderComposer() {
   const draft = state.draft;
+  // Projects belong to a client; showing ZCode's folders under WorkBuddy would be
+  // a lie, so the list is only used while it matches the selected target.
+  const projects = state.projects.client === draft.target
+    ? state.projects
+    : { list: [], reason: null };
   const issue = (field) => {
     const found = state.issues.find((item) => item.field === field);
     return found ? `<span class="error">${esc(found.message)}</span>` : '';
@@ -359,14 +366,26 @@ function renderComposer() {
         </select>
       </div>
       <div class="field${invalid('mentions[0].project.path')}">
-        <label for="path-input">项目目录</label>
-        <input id="path-input" value="${esc(draft.path)}" placeholder="D:\\Work\\MediaDock" />
+        <label for="path-select">项目目录</label>
+        ${projects.list.length > 0
+          ? `<select id="path-select">
+              <option value="">选择项目…</option>
+              ${projects.list
+                .map(
+                  (project) =>
+                    `<option value="${esc(project.path)}" data-project-id="${esc(project.id)}"${project.path === draft.path ? ' selected' : ''}>${esc(project.name)} · ${esc(project.path)}</option>`
+                )
+                .join('')}
+            </select>`
+          : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:\\Work\\MediaDock" />`}
+        ${projects.list.length === 0 && projects.reason
+          ? `<span class="hint">${esc(projects.reason)}；可直接填写目录</span>`
+          : ''}
         ${issue('mentions[0].project.path')}
       </div>
-      <div class="field${invalid('mentions[0].project')}">
-        <label for="project-input">项目 ID</label>
-        <input id="project-input" value="${esc(draft.projectId)}" placeholder="proj_mediadock" />
-        ${issue('mentions[0].project')}
+      <div class="field">
+        <label>项目 ID</label>
+        <span class="mono">${esc(draft.projectId || '由客户端自动识别')}</span>
       </div>
     </div>
     <div class="composer-actions">
@@ -411,6 +430,8 @@ function renderConversation() {
   const messagesEl = $('#messages');
   messagesEl.scrollTop = messagesEl.scrollHeight;
   bindComposer();
+  // One fetch per client: the guard keeps the re-render from asking again.
+  if (state.projects.client !== state.draft.target) void loadProjects(state.draft.target);
   $$('[data-report]').forEach((button) => {
     button.onclick = () => void reportResult(button.dataset.report);
   });
@@ -426,8 +447,15 @@ function readDraft() {
   state.draft.target = $('#target-select').value;
   state.draft.model = $('#model-input').value;
   state.draft.reasoning = $('#reasoning-select').value;
-  state.draft.path = $('#path-input').value;
-  state.draft.projectId = $('#project-input').value;
+  const projectSelect = $('#path-select');
+  const pathInput = $('#path-input');
+  if (projectSelect) {
+    state.draft.path = projectSelect.value;
+    const option = projectSelect.selectedOptions && projectSelect.selectedOptions[0];
+    state.draft.projectId = option?.dataset?.projectId ?? '';
+  } else if (pathInput) {
+    state.draft.path = pathInput.value;
+  }
 }
 
 function mentionFor(work) {
@@ -467,8 +495,6 @@ async function send(work) {
     if (!state.draft.model.trim()) issues.push({ field: 'mentions[0].model', message: '派活必须指定模型' });
     if (!state.draft.path.trim())
       issues.push({ field: 'mentions[0].project.path', message: '派活必须指定项目目录' });
-    if (!state.draft.projectId.trim())
-      issues.push({ field: 'mentions[0].project', message: '派活必须指定项目 ID' });
     if (issues.length > 0) {
       state.issues = issues;
       renderConversation();
@@ -535,6 +561,25 @@ async function createGroup() {
 
 /* -------------------------------------------------------------------- wiring */
 
+async function loadProjects(client) {
+  if (!client) return;
+  state.projects = { client, list: [], reason: null, loading: true };
+  try {
+    const response = await fetch(`/api/async/projects?client=${encodeURIComponent(client)}`);
+    const body = await response.json().catch(() => ({}));
+    const list = Array.isArray(body.projects) ? body.projects : [];
+    state.projects = {
+      client,
+      list,
+      reason: list.length > 0 ? null : body.reason ?? '未能从客户端读取项目列表',
+      loading: false,
+    };
+  } catch (error) {
+    state.projects = { client, list: [], reason: error.message, loading: false };
+  }
+  renderConversation();
+}
+
 function bindComposer() {
   const body = $('#body-input');
   if (body) {
@@ -552,8 +597,6 @@ function bindComposer() {
     ['#target-select', 'target'],
     ['#model-input', 'model'],
     ['#reasoning-select', 'reasoning'],
-    ['#path-input', 'path'],
-    ['#project-input', 'projectId'],
   ]) {
     const element = $(id);
     if (element)
@@ -561,6 +604,16 @@ function bindComposer() {
         state.draft[key] = element.value;
       };
   }
+  const target = $('#target-select');
+  if (target) {
+    target.onchange = () => {
+      readDraft();
+      // Folders belong to one client, so switching the target reloads the list.
+      void loadProjects(state.draft.target);
+    };
+  }
+  const projectSelect = $('#path-select');
+  if (projectSelect) projectSelect.onchange = () => readDraft();
   const dispatch = $('#dispatch-button');
   if (dispatch) dispatch.onclick = () => void send(true);
   const plain = $('#send-button');

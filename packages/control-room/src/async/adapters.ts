@@ -21,6 +21,7 @@ import type {
   ClientCapabilityView,
   ModelConfig,
   ProjectBinding,
+  ProjectOption,
   SessionPolicy,
 } from './contracts.js';
 
@@ -91,6 +92,8 @@ export interface DispatchAdapter {
   deliver(request: DeliverRequest): Promise<DeliverOutcome>;
   /** Explicit, single-shot check. Never called on a timer. */
   probe?(): Promise<ClientProbeResult>;
+  /** Projects the client already has configured. Absent when it cannot list them. */
+  listProjects?(): Promise<ProjectOption[]>;
 }
 
 /* ---------------------------------------------------------------- defaults */
@@ -244,6 +247,13 @@ export class AdapterRegistry {
     return [...this.adapters.values()];
   }
 
+  /** Ask the client's adapter for its configured projects; `null` when unsupported. */
+  projects(client: string): Promise<ProjectOption[]> | null {
+    const adapter = this.adapters.get(client);
+    if (!adapter?.listProjects) return null;
+    return adapter.listProjects();
+  }
+
   /** Static matrix overlaid with whatever the adapter itself reports. */
   capability(client: string): ClientCapabilityView {
     const base = capabilitySeed(client);
@@ -344,6 +354,44 @@ export class HttpBridgeAdapter implements DispatchAdapter {
         notes: [],
         error: (error as Error).message,
       };
+    }
+  }
+
+  /**
+   * The client's configured projects, read through the bridge.
+   *
+   * The bridge owns the client integration, so the app never guesses a project
+   * id: it asks once and the form carries whatever comes back.
+   */
+  async listProjects(): Promise<ProjectOption[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(
+        `${this.baseUrl}/projects?client=${encodeURIComponent(this.client)}`,
+        { signal: controller.signal }
+      );
+      const text = await response.text();
+      if (!response.ok) throw new Error(`派发桥接返回 ${response.status}：${text.slice(0, 200)}`);
+      const body = (text ? JSON.parse(text) : {}) as { projects?: unknown; reason?: unknown };
+      const projects = Array.isArray(body.projects) ? body.projects : [];
+      const parsed = projects
+        .map((item) => item as Partial<ProjectOption>)
+        .filter((item) => typeof item?.id === 'string' && item.id && typeof item?.path === 'string' && item.path)
+        .map((item) => ({
+          id: String(item.id),
+          name: typeof item.name === 'string' && item.name ? item.name : String(item.path),
+          path: String(item.path),
+        }));
+      if (parsed.length === 0 && typeof body.reason === 'string' && body.reason) {
+        throw new Error(body.reason);
+      }
+      return parsed;
+    } catch (error) {
+      const message = (error as Error).name === 'AbortError' ? '派发桥接超时' : (error as Error).message;
+      throw new Error(message);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

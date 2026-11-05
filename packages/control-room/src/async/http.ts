@@ -176,6 +176,14 @@ async function route(ctx: Ctx, engine: AsyncEngine): Promise<void> {
     return;
   }
 
+  if (method === 'GET' && path === '/api/async/projects') {
+    // Ask the client what it already has configured. A project id is an internal
+    // handle; the person picking a folder should never have to type one.
+    const client = (url.searchParams.get('client') ?? '').trim();
+    json(ctx.response, 200, await engine.listProjects(client));
+    return;
+  }
+
   if (method === 'POST' && path === '/api/async/tasks') {
     const body = await readJson(ctx.request);
     const receipt = await engine.submit(body as unknown as SubmitTaskInput);

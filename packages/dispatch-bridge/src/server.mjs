@@ -18,7 +18,7 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 import { PORTS, SUPPORTED_CLIENTS } from './config.mjs';
-import { driverFor, modelOptionsFor, probeClient, sameWorkspace } from './drivers.mjs';
+import { driverFor, listProjectsFor, modelOptionsFor, probeClient, sameWorkspace } from './drivers.mjs';
 import { BridgeStore } from './store.mjs';
 import { TurnWatcher } from './watcher.mjs';
 
@@ -204,7 +204,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     return {
       status: 'delivered',
       sessionId: record.sessionId,
-      projectId: request.project.id ?? null,
+      projectId: request.project.id || entry.desktop.projectId || null,
       workspacePath: workspace,
       modelId: request.model?.modelId ?? null,
       account: request.model?.account ?? null,
@@ -242,6 +242,19 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
 
     if (method === 'GET' && url.pathname === '/runs') {
       json(response, 200, { runs: store.pending() });
+      return;
+    }
+
+    if (method === 'GET' && url.pathname === '/projects') {
+      const client = String(url.searchParams.get('client') || '').trim();
+      try {
+        const projects = await listProjectsFor({ drivers, client });
+        json(response, 200, { client, projects, reason: null });
+      } catch (error) {
+        // An empty list plus a reason lets the form fall back to manual path entry
+        // instead of pretending the client has no projects.
+        json(response, 200, { client, projects: [], reason: error.message });
+      }
       return;
     }
 

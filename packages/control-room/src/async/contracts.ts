@@ -86,6 +86,14 @@ export interface ProjectBinding {
   path: string;
 }
 
+/** A project the client already has configured, read from the client itself. */
+export interface ProjectOption {
+  /** Internal handle. The person never types this; the form carries it along. */
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface SessionPolicy {
   /** `new` creates a desktop-visible session; `continue` reuses `sessionId`. */
   policy: 'new' | 'continue';

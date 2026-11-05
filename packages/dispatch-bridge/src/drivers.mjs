@@ -52,6 +52,15 @@ export async function loadDrivers(dir, { log = () => {} } = {}) {
       import(pathToFileURL(join(dir, 'native-clients.mjs')).href),
       import(pathToFileURL(join(dir, 'factory.mjs')).href),
     ]);
+    // Node's built-in WebSocket fails to inflate a large CDP reply (the service
+    // registry snapshot), which tears the socket down mid-handshake. The `ws`
+    // client does not, so prefer it and keep the built-in as a fallback.
+    let WebSocketImpl;
+    try {
+      WebSocketImpl = (await import('ws')).default;
+    } catch {
+      WebSocketImpl = undefined;
+    }
     const classes = {
       workbuddy: clients.WorkBuddyDesktop,
       zcode: clients.ZCodeDesktop,
@@ -68,7 +77,8 @@ export async function loadDrivers(dir, { log = () => {} } = {}) {
       reason: null,
       dir,
       classes,
-      connect: (options) => cdp.DesktopIpcTransport.connect(options),
+      connect: (options) =>
+        cdp.DesktopIpcTransport.connect(WebSocketImpl ? { ...options, WebSocket: WebSocketImpl } : options),
     };
   } catch (error) {
     log(`[bridge] 适配器加载失败：${error.message}`);
@@ -84,6 +94,29 @@ export async function loadDrivers(dir, { log = () => {} } = {}) {
 export function driverFor(drivers, client) {
   if (!drivers.available) return null;
   return drivers.classes[client] ?? null;
+}
+
+/**
+ * The client's own configured projects.
+ *
+ * A project id is an internal handle; the folder path is what a person knows, so
+ * the app asks the client instead of asking the human. Clients that cannot
+ * enumerate their projects say so rather than returning a made-up list.
+ */
+export async function listProjectsFor({ drivers, client, timeoutMs = 20_000 }) {
+  if (!SUPPORTED_CLIENTS.includes(client)) throw new Error(`不支持的客户端：${client}`);
+  if (!drivers.available) throw new Error(drivers.reason);
+  const Driver = driverFor(drivers, client);
+  if (!Driver || typeof Driver.prototype?.listProjects !== 'function') {
+    throw new Error(`「${client}」无法枚举项目列表`);
+  }
+  const transport = await drivers.connect({ client, port: PORTS[client], timeoutMs });
+  try {
+    const desktop = new Driver(transport, null, {});
+    return await desktop.listProjects();
+  } finally {
+    transport?.close?.();
+  }
 }
 
 /**

@@ -40,6 +40,7 @@ import type {
   MessageKind,
   MessageRecord,
   ModelConfig,
+  ProjectOption,
   RecordCallbackInput,
   Run,
   Stage,
@@ -199,6 +200,36 @@ export class AsyncEngine {
     this.registry.register(adapter);
   }
 
+  /**
+   * The client's configured projects.
+   *
+   * A project id is the client's internal handle; the folder path is what a
+   * person knows. Asking the client is the only honest source, so an
+   * unanswerable client returns an empty list plus the reason and the form
+   * falls back to a manual path instead of blocking the dispatch.
+   */
+  async listProjects(client: string): Promise<{
+    client: string;
+    projects: ProjectOption[];
+    reason: string | null;
+  }> {
+    const trimmed = client.trim();
+    if (!trimmed) throw new AsyncValidationError([{ field: 'client', message: '必须指定客户端' }]);
+    const pending = this.registry.projects(trimmed);
+    if (!pending) {
+      return {
+        client: trimmed,
+        projects: [],
+        reason: `「${trimmed}」没有可用的派发桥接，无法读取项目列表`,
+      };
+    }
+    try {
+      return { client: trimmed, projects: await pending, reason: null };
+    } catch (error) {
+      return { client: trimmed, projects: [], reason: (error as Error).message };
+    }
+  }
+
   subscribe(listener: (event: EngineEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -269,7 +300,7 @@ export class AsyncEngine {
           dependsOn: [],
           client: spec.client,
           project: {
-            id: knownProjectId ?? spec.project.id,
+            id: knownProjectId ?? spec.project.id ?? '',
             path: spec.project.path,
           },
           session:
@@ -893,7 +924,10 @@ export class AsyncEngine {
           kind: stageKindFor(mention),
           label: `@${mention.target}`,
           client: mention.client as string,
-          project: mention.project as { id: string; path: string },
+          project: {
+            id: String((mention.project as { id?: string }).id ?? ''),
+            path: String((mention.project as { path?: string }).path ?? ''),
+          },
           session: mention.session ?? { policy: 'new' as const, sessionId: null },
           model: mention.model as ModelConfig,
           completion: mention.completion ?? {
@@ -1766,7 +1800,8 @@ function validateStage(stage: SubmitStageInput, index: number, issues: Validatio
   if (!stage.project?.path?.trim()) {
     issues.push({ field: `${at}.project.path`, message: '必须选择目标项目目录' });
   }
-  if (!stage.project?.id?.trim()) issues.push({ field: `${at}.project.id`, message: '缺少项目 ID' });
+  // A project id is the client's internal handle; people only know the folder.
+  // The client resolves it from the path and reports it back on the receipt.
   if (!stage.model?.modelId?.trim()) issues.push({ field: `${at}.model.modelId`, message: '必须选择模型' });
   if (!stage.model?.account?.trim())
     issues.push({ field: `${at}.model.account`, message: '必须选择账户或提供商' });
