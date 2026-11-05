@@ -94,6 +94,16 @@ export interface ProjectOption {
   path: string;
 }
 
+/** A model the client can actually select right now, read from the client itself. */
+export interface ModelOption {
+  /** Value the client accepts as `model.modelId`. */
+  id: string;
+  label: string;
+  /** Reasoning levels this model reports; empty when the client does not say. */
+  reasoning: string[];
+  description?: string;
+}
+
 export interface SessionPolicy {
   /** `new` creates a desktop-visible session; `continue` reuses `sessionId`. */
   policy: 'new' | 'continue';

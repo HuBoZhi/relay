@@ -81,6 +81,8 @@ const state = {
   loading: false,
   /** Configured projects per client, read from the client itself. */
   projects: { client: null, list: [], reason: null, loading: false },
+  /** Models per client, read from the client's own catalogue (one fetch each). */
+  models: {},
 };
 
 /* ------------------------------------------------------------------ helpers */
@@ -351,28 +353,51 @@ function renderComposer() {
     state.issues.some((item) => item.field === field) ? ' data-invalid="true"' : '';
 
   const rows = draft.participants
-    .map(
-      (participant, index) => `<div class="participant" data-index="${index}">
+    .map((participant, index) => {
+      const list = state.models[participant.target]?.list ?? [];
+      const entry = list.find((model) => model.id === participant.model);
+      // A model reports the reasoning levels it accepts; fall back to the common
+      // four when the client's catalogue stays quiet about them.
+      const levels =
+        entry && Array.isArray(entry.reasoning) && entry.reasoning.length > 0
+          ? entry.reasoning
+          : REASONING_LEVELS;
+      const modelField =
+        list.length > 0
+          ? `<select data-role="model" aria-label="模型">${
+              entry
+                ? ''
+                : `<option value="${esc(participant.model)}" selected>${esc(participant.model || '选择模型…')}</option>`
+            }${list
+              .map(
+                (model) =>
+                  `<option value="${esc(model.id)}"${model.id === participant.model ? ' selected' : ''}>${esc(model.label)}</option>`
+              )
+              .join('')}</select>`
+          : `<input data-role="model" value="${esc(participant.model)}" placeholder="模型" aria-label="模型" />`;
+      return `<div class="participant" data-index="${index}">
         <select data-role="target" aria-label="第 ${index + 1} 个 Agent">
           ${AGENTS.map(
             (agent) =>
               `<option value="${agent.id}"${agent.id === participant.target ? ' selected' : ''}>${agent.label}</option>`
           ).join('')}
         </select>
-        <input data-role="model" value="${esc(participant.model)}" placeholder="模型" aria-label="模型" />
+        ${modelField}
         <select data-role="reasoning" aria-label="思考强度">
-          ${REASONING_LEVELS.map(
-            (level) =>
-              `<option value="${level}"${level === participant.reasoning ? ' selected' : ''}>${level}</option>`
-          ).join('')}
+          ${levels
+            .map(
+              (level) =>
+                `<option value="${level}"${level === participant.reasoning ? ' selected' : ''}>${level}</option>`
+            )
+            .join('')}
         </select>
         ${
           draft.participants.length > 1
             ? `<button type="button" class="link-button" data-role="remove">移除</button>`
             : '<span class="participant-spacer"></span>'
         }
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
 
   return `<div class="composer">
@@ -457,6 +482,9 @@ function renderConversation() {
   // One fetch per client: the guard keeps the re-render from asking again.
   const primaryTarget = state.draft.participants[0]?.target ?? null;
   if (primaryTarget && state.projects.client !== primaryTarget) void loadProjects(primaryTarget);
+  // Each row's model list belongs to that row's agent, so every addressed agent is
+  // asked once (the cache makes the repeat renders free).
+  for (const participant of state.draft.participants) void loadModels(participant.target);
   $$('[data-report]').forEach((button) => {
     button.onclick = () => void reportResult(button.dataset.report);
   });
@@ -624,6 +652,54 @@ async function loadProjects(client) {
 }
 
 /**
+ * The client's own model catalogue, fetched once per client.
+ *
+ * One fetch per client: a re-render must not ask the client again, and a failed
+ * read must not turn into a request loop.
+ */
+async function loadModels(client) {
+  if (!client || state.models[client]) return;
+  state.models[client] = { list: [], reason: null, loading: true };
+  try {
+    const response = await fetch(`/api/async/models?client=${encodeURIComponent(client)}`);
+    const body = await response.json().catch(() => ({}));
+    const list = Array.isArray(body.models) ? body.models : [];
+    state.models[client] = {
+      list,
+      reason: list.length > 0 ? null : (body.reason ?? '未能从客户端读取模型列表'),
+      loading: false,
+    };
+    adoptReportedModel(client);
+  } catch (error) {
+    state.models[client] = { list: [], reason: error.message, loading: false };
+  }
+  if (state.view) renderConversation();
+}
+
+/**
+ * Keep the draft on a model the client actually offers.
+ *
+ * The catalogue is the client's, so a row still holding a retired id would be
+ * refused at dispatch time. Replace it with the agent's default when that is
+ * still offered, otherwise with the first model the client lists.
+ */
+function adoptReportedModel(client) {
+  const list = state.models[client]?.list ?? [];
+  if (list.length === 0) return;
+  for (const participant of state.draft.participants) {
+    if (participant.target !== client) continue;
+    if (list.some((model) => model.id === participant.model)) continue;
+    const preferred =
+      list.find((model) => model.id === AGENT_DEFAULTS[client]?.model) ?? list[0];
+    participant.model = preferred.id;
+    const levels = Array.isArray(preferred.reasoning) ? preferred.reasoning : [];
+    if (levels.length > 0 && !levels.includes(participant.reasoning)) {
+      participant.reasoning = levels[0];
+    }
+  }
+}
+
+/**
  * Typing `@` opens the agent list.
  *
  * The list is what the composer already knows about — the built-in agents, marked
@@ -758,10 +834,15 @@ function bindComposer() {
         // clients rarely accept the same model id.
         const defaults = AGENT_DEFAULTS[target.value];
         if (defaults) state.draft.participants[index] = { target: target.value, ...defaults };
+        // A different agent means a different catalogue: the previous list does not
+        // describe what this one can run.
+        void loadModels(target.value);
         if (index === 0) void loadProjects(target.value);
         renderConversation();
       };
     }
+    const model = row.querySelector('[data-role="model"]');
+    if (model) model.onchange = () => readDraft();
     const remove = row.querySelector('[data-role="remove"]');
     if (remove) {
       remove.onclick = () => {

@@ -40,6 +40,7 @@ import type {
   MessageKind,
   MessageRecord,
   ModelConfig,
+  ModelOption,
   ProjectOption,
   RecordCallbackInput,
   Run,
@@ -227,6 +228,35 @@ export class AsyncEngine {
       return { client: trimmed, projects: await pending, reason: null };
     } catch (error) {
       return { client: trimmed, projects: [], reason: (error as Error).message };
+    }
+  }
+
+  /**
+   * The models the client can select right now.
+   *
+   * A model id is the client's vocabulary, not this app's: the form offers what
+   * the client reports and falls back to a typed value only when it reports
+   * nothing (with the reason shown next to the field).
+   */
+  async listModels(client: string): Promise<{
+    client: string;
+    models: ModelOption[];
+    reason: string | null;
+  }> {
+    const trimmed = client.trim();
+    if (!trimmed) throw new AsyncValidationError([{ field: 'client', message: '必须指定客户端' }]);
+    const pending = this.registry.models(trimmed);
+    if (!pending) {
+      return {
+        client: trimmed,
+        models: [],
+        reason: `「${trimmed}」没有可用的派发桥接，无法读取模型列表`,
+      };
+    }
+    try {
+      return { client: trimmed, models: await pending, reason: null };
+    } catch (error) {
+      return { client: trimmed, models: [], reason: (error as Error).message };
     }
   }
 

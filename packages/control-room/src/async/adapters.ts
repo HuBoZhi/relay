@@ -20,6 +20,7 @@ import type {
   ChatInjectionCapability,
   ClientCapabilityView,
   ModelConfig,
+  ModelOption,
   ProjectBinding,
   ProjectOption,
   SessionPolicy,
@@ -94,6 +95,8 @@ export interface DispatchAdapter {
   probe?(): Promise<ClientProbeResult>;
   /** Projects the client already has configured. Absent when it cannot list them. */
   listProjects?(): Promise<ProjectOption[]>;
+  /** Models the client can select right now. Absent when it cannot list them. */
+  listModels?(client?: string): Promise<ModelOption[]>;
 }
 
 /* ---------------------------------------------------------------- defaults */
@@ -254,6 +257,22 @@ export class AdapterRegistry {
     return adapter.listProjects();
   }
 
+  /**
+   * Ask the client's adapter which models it can run; `null` when unsupported.
+   *
+   * A catalogue lives in the bridge, not in one client's connection, so a client
+   * without its own adapter (an agent the bridge does not dispatch to yet) still
+   * gets an answer from whichever bridge is registered.
+   */
+  models(client: string): Promise<ModelOption[]> | null {
+    const own = this.adapters.get(client);
+    if (own?.listModels) return own.listModels();
+    for (const adapter of this.adapters.values()) {
+      if (adapter.listModels) return adapter.listModels(client);
+    }
+    return null;
+  }
+
   /** Static matrix overlaid with whatever the adapter itself reports. */
   capability(client: string): ClientCapabilityView {
     const base = capabilitySeed(client);
@@ -387,6 +406,53 @@ export class HttpBridgeAdapter implements DispatchAdapter {
         throw new Error(body.reason);
       }
       return parsed;
+    } catch (error) {
+      const message = (error as Error).name === 'AbortError' ? '派发桥接超时' : (error as Error).message;
+      throw new Error(message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Models the client can select right now, read through the bridge.
+   *
+   * The bridge reads the client's own catalogue; the app never keeps a second
+   * list that would drift with the next client release.
+   */
+  async listModels(client = this.client): Promise<ModelOption[]> {
+    const body = await this.getJson<{ models?: unknown; reason?: unknown }>('/models', client);
+    const models = Array.isArray(body.models) ? body.models : [];
+    const parsed = models
+      .map((item) => item as Partial<ModelOption>)
+      .filter((item) => typeof item?.id === 'string' && item.id)
+      .map((item) => ({
+        id: String(item.id),
+        label: typeof item.label === 'string' && item.label ? item.label : String(item.id),
+        reasoning: Array.isArray(item.reasoning)
+          ? item.reasoning.filter((level): level is string => typeof level === 'string')
+          : [],
+        ...(typeof item.description === 'string' && item.description
+          ? { description: item.description }
+          : {}),
+      }));
+    if (parsed.length === 0 && typeof body.reason === 'string' && body.reason) {
+      throw new Error(body.reason);
+    }
+    return parsed;
+  }
+
+  private async getJson<T>(path: string, client = this.client): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(
+        `${this.baseUrl}${path}?client=${encodeURIComponent(client)}`,
+        { signal: controller.signal }
+      );
+      const text = await response.text();
+      if (!response.ok) throw new Error(`派发桥接返回 ${response.status}：${text.slice(0, 200)}`);
+      return (text ? JSON.parse(text) : {}) as T;
     } catch (error) {
       const message = (error as Error).name === 'AbortError' ? '派发桥接超时' : (error as Error).message;
       throw new Error(message);

@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 
 import { PORTS, SUPPORTED_CLIENTS } from './config.mjs';
 import { driverFor, listProjectsFor, modelOptionsFor, probeClient, sameWorkspace } from './drivers.mjs';
+import { listModelsFor } from './models.mjs';
 import { BridgeStore } from './store.mjs';
 import { TurnWatcher } from './watcher.mjs';
 
@@ -254,6 +255,18 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
         // An empty list plus a reason lets the form fall back to manual path entry
         // instead of pretending the client has no projects.
         json(response, 200, { client, projects: [], reason: error.message });
+      }
+      return;
+    }
+
+    if (method === 'GET' && url.pathname === '/models') {
+      const client = String(url.searchParams.get('client') || '').trim();
+      try {
+        json(response, 200, await listModelsFor(client));
+      } catch (error) {
+        // Same contract as /projects: the form keeps a typed field when the
+        // machine has no readable catalogue for this client.
+        json(response, 200, { client, models: [], reason: error.message });
       }
       return;
     }

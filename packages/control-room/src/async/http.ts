@@ -184,6 +184,14 @@ async function route(ctx: Ctx, engine: AsyncEngine): Promise<void> {
     return;
   }
 
+  if (method === 'GET' && path === '/api/async/models') {
+    // The client owns the catalogue: ask it rather than shipping a list here that
+    // goes stale the moment the client adds a model.
+    const client = (url.searchParams.get('client') ?? '').trim();
+    json(ctx.response, 200, await engine.listModels(client));
+    return;
+  }
+
   if (method === 'POST' && path === '/api/async/tasks') {
     const body = await readJson(ctx.request);
     const receipt = await engine.submit(body as unknown as SubmitTaskInput);

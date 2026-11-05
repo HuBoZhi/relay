@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/control-room`: the model field in the dispatch form is a list of the models each client can select right now, read from the client itself (`GET /api/async/models`, bridged to the client's own catalogue: Codex's fetched model cache, ZCode's provider rules, WorkBuddy's craft-agent models). A model reports its reasoning levels, a retired id is replaced by one the client still offers, and a client with no readable catalogue keeps a typed field that says why.
+
 - `@agent-relay/control-room`: the dispatch form lists the projects each client already has configured and fills the project ID from the chosen folder (`GET /api/async/projects`, bridged to the client's own project list). When a client cannot be asked, the form says why and accepts a folder on its own.
 
 - `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.

@@ -897,7 +897,10 @@ body {
 }
 
 .participant {
-  grid-template-columns: 132px minmax(0, 1fr) 92px 52px;
+  /* The model is one id, not a sentence: a fixed column keeps the row compact
+     instead of stretching a single value across the composer. */
+  grid-template-columns: 132px 210px 92px 52px;
+  justify-content: start;
 }
 
 .field.project {
