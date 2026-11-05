@@ -12,6 +12,8 @@
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 
+import WebSocketClient from 'ws';
+
 import { PORTS, SUPPORTED_CLIENTS } from './config.mjs';
 
 /** Read-only interface checks, evaluated in the app's own renderer. */
@@ -53,13 +55,14 @@ export async function loadDrivers(dir, { log = () => {} } = {}) {
       import(pathToFileURL(join(dir, 'factory.mjs')).href),
     ]);
     // Node's built-in WebSocket fails to inflate a large CDP reply (the service
-    // registry snapshot), which tears the socket down mid-handshake. The `ws`
-    // client does not, so prefer it and keep the built-in as a fallback.
-    let WebSocketImpl;
-    try {
-      WebSocketImpl = (await import('ws')).default;
-    } catch {
-      WebSocketImpl = undefined;
+    // registry snapshot), so prefer the `ws` client. A static import is deliberate:
+    // inside a bundle, a dynamic `import('ws')` is easy to end up with a namespace
+    // whose `.default` is not the constructor, which surfaces as
+    // "Socket is not a constructor" only at runtime.
+    const WebSocketImpl =
+      typeof WebSocketClient === 'function' ? WebSocketClient : globalThis.WebSocket;
+    if (typeof WebSocketImpl !== 'function') {
+      log('[bridge] 没有可用的 WebSocket 实现，CDP 客户端不可用（本机客户端只能走 CLI）');
     }
     const classes = {
       workbuddy: clients.WorkBuddyDesktop,

@@ -93,7 +93,13 @@ async function main() {
     legalComments: 'none',
     logLevel: 'warning',
     banner: {
-      js: '// 由 scripts/build.mjs 生成：本机派发桥接打包产物，请勿手工修改。',
+      // `ws` is CommonJS and calls require() internally. In an ESM bundle esbuild
+      // cannot provide that, so give the bundle a real require before anything runs.
+      js: [
+        '// 由 scripts/build.mjs 生成：本机派发桥接打包产物，请勿手工修改。',
+        "import { createRequire as __relayCreateRequire } from 'node:module';",
+        'const require = __relayCreateRequire(import.meta.url);',
+      ].join('\n'),
     },
   });
   if (bridge.errors.length > 0) throw new Error('桥接打包失败');

@@ -365,7 +365,7 @@ function renderComposer() {
             .join('')}
         </select>
       </div>
-      <div class="field${invalid('mentions[0].project.path')}">
+      <div class="field grow${invalid('mentions[0].project.path')}">
         <label for="path-select">项目目录</label>
         ${projects.list.length > 0
           ? `<select id="path-select">
@@ -383,9 +383,11 @@ function renderComposer() {
           : ''}
         ${issue('mentions[0].project.path')}
       </div>
-      <div class="field">
-        <label>项目 ID</label>
-        <span class="mono">${esc(draft.projectId || '由客户端自动识别')}</span>
+      <div class="field id">
+        <label for="project-id-static">项目 ID</label>
+        <span class="static mono" id="project-id-static" title="${esc(draft.projectId)}">${esc(
+          draft.projectId || '选择项目后自动带出'
+        )}</span>
       </div>
     </div>
     <div class="composer-actions">
@@ -613,7 +615,18 @@ function bindComposer() {
     };
   }
   const projectSelect = $('#path-select');
-  if (projectSelect) projectSelect.onchange = () => readDraft();
+  if (projectSelect) {
+    projectSelect.onchange = () => {
+      readDraft();
+      // The id is read-only, so update it in place instead of re-rendering the
+      // whole conversation (which would steal focus from the select).
+      const box = $('#project-id-static');
+      if (box) {
+        box.textContent = state.draft.projectId || '选择项目后自动带出';
+        box.title = state.draft.projectId;
+      }
+    };
+  }
   const dispatch = $('#dispatch-button');
   if (dispatch) dispatch.onclick = () => void send(true);
   const plain = $('#send-button');

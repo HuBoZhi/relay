@@ -587,14 +587,52 @@ body {
 
 .composer-row {
   display: flex;
-  gap: 10px;
+  gap: 10px 12px;
   flex-wrap: wrap;
-  align-items: flex-end;
+  /* Top-aligned: a field with an extra hint line must not push its label out of
+     line with the others. */
+  align-items: flex-start;
 }
 
 .field {
   display: grid;
   gap: 4px;
+  min-width: 0;
+  flex: 1 1 132px;
+}
+
+.field.grow {
+  flex: 3 1 260px;
+}
+
+.field.id {
+  flex: 0 0 168px;
+}
+
+/* A read-only value sits in the same box as an input so rows stay level. */
+.field .static {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: #8b9aa5;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field > label {
+  height: 15px;
+  line-height: 15px;
+}
+
+.field .hint,
+.field .error {
+  display: block;
+  margin-top: 2px;
 }
 
 .field > label {
@@ -605,7 +643,8 @@ body {
 
 .field input,
 .field select {
-  padding: 7px 9px;
+  height: 32px;
+  padding: 0 9px;
   border-radius: 7px;
   border: 1px solid var(--line);
   background: #0d141a;
