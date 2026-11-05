@@ -131,8 +131,15 @@ export async function listProjectsFor({ drivers, client, timeoutMs = 20_000 }) {
 export function modelOptionsFor(client, model) {
   if (!model) return undefined;
   if (client === 'zcode') {
+    // The console's account labels are not ZCode provider ids. Passing an alias
+    // to createTask lets ZCode fall back to its account, then submit rejects the
+    // very session we just created because its native provider id differs.
+    const provider = model.provider || model.account;
+    const providerId = ['zhipu', 'bigmodel'].includes(String(provider).toLowerCase())
+      ? 'account:bigmodel-individual-coding-plan'
+      : provider;
     return {
-      providerId: model.provider || model.account,
+      providerId,
       modelId: model.modelId,
       options: { reasoningLevel: model.reasoning },
     };

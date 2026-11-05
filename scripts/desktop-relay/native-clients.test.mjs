@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { ZCodeDesktop } from './native-clients.mjs';
+import { modelOptionsFor } from '../../packages/dispatch-bridge/src/drivers.mjs';
 
 // CDP is the external boundary. Emulate changed bundle and minified names,
 // including Chrome's error-object response when an obsolete import fails.
@@ -74,6 +75,32 @@ test('creates a task in its existing desktop project using that project root and
 
 test('reports a failed import before trying to inspect an error as a function', async () => {
   await assert.rejects(new ZCodeDesktop(renderer({ importError: true })).initialize(), /service module unavailable/);
+});
+
+test('dispatches a new GLM task with the native provider returned by ZCode', async () => {
+  const workspace = 'G:\\Coding\\Gitlab\\空白';
+  const model = modelOptionsFor('zcode', {
+    account: 'BigModel', provider: 'zhipu', modelId: 'GLM-5.3', reasoning: 'max',
+  });
+  const transport = renderer({ serviceResult: (_service, method) => {
+    if (method === 'readProjects') return [];
+    if (method === 'createTask') return { taskId: 'new-task' };
+    if (method === 'readSession') return { session: {
+      workspace: { workspacePath: workspace }, status: 'idle',
+      model: { providerId: 'account:bigmodel-individual-coding-plan', modelId: 'GLM-5.3' },
+    }, messages: [] };
+    if (method === 'sendPrompt') return undefined;
+    throw Error('Unexpected service call: ' + method);
+  } });
+  const desktop = new ZCodeDesktop(transport, null, { workspace, model });
+  const { sessionId } = await desktop.createSession();
+  assert.equal((await desktop.submit(sessionId, '你好', 'request')).accepted, true);
+  assert.deepEqual(transport.calls.find(c => c[1] === 'createTask')[2].modelSelection, model);
+  assert.equal(transport.calls.filter(c => c[1] === 'sendPrompt').length, 1);
+
+  desktop.model = { ...model, modelId: 'GLM-5.3-Flash' };
+  await assert.rejects(desktop.submit(sessionId, 'wrong model', 'other'), /model mismatch/);
+  assert.equal(transport.calls.filter(c => c[1] === 'sendPrompt').length, 1);
 });
 
 test('fails closed when the current module has no connected desktop services', async () => {
