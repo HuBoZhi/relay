@@ -474,8 +474,6 @@ function registerIpc() {
     const dataRootChanged = next.dataRoot !== settings.dataRoot;
     // Adapters are built at startup, so a new bridge needs a restart to take over.
     const bridgesChanged = JSON.stringify(next.bridges) !== JSON.stringify(settings.bridges);
-    // Adapters are built at startup, so a new bridge needs a restart to take over.
-    const bridgesChanged = JSON.stringify(next.bridges) !== JSON.stringify(settings.bridges);
     if (app.isPackaged && next.loginAtStartup !== loginItemEnabled()) {
       app.setLoginItemSettings({ openAtLogin: next.loginAtStartup, openAsHidden: true });
     }
