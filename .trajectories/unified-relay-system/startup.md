@@ -1,0 +1,11 @@
+# Unified local startup — 2026-11-03
+
+One HKCU Run entry `RelayControlRoom` now invokes `D:\Programs\AgentRelay\Start-RelaySystem.ps1`. The same launcher is used by the Start Menu shortcut, and the native tray startup toggle preserves this launcher rather than replacing it with a console-only exe command.
+
+The launcher verifies that console and desktop adapters reference exactly the existing `D:\Programs\AgentRelay\data\workspace.private.json`, clears inherited terminal credential overrides for child startup, checks/starts the three supported desktop interfaces, starts/reuses the tray console, and records health/status at `data\unified-system-status.json`. It never creates a workspace, launches a model task, or force-stops editors. The supported backend is hosted Relaycast; installed native broker startup explicitly refuses win32 and is not bypassed.
+
+The previous ZCode/WorkBuddy/Factory Run entries were backed up to `D:\Programs\RelayControlRoom\retired-startup-entries.json` and removed. The installer writes `data\unified-startup.json` for other setup tools to preserve this single entry. Current read-back shows only the unified Run command for this system. The status record verifies console health, same workspace state path and Factory's ready interface. Current ZCode and WorkBuddy processes were already running without endpoints; they are reported as restart_needed and left untouched. A new sign-in starts them with the configured endpoint arguments.
+
+Validation: 27 desktop tests pass, including retaining the system launcher when toggling login startup; PowerShell parser and actual installed unified launcher both pass. `/api/bootstrap` after unified launch reports live. No Windows reboot was performed. Installation paths and permanent profile/cache are on D; operational status/receipts remain under the existing D installation.
+
+The exact Windows PowerShell 5.1 sign-in command was subsequently exercised with an unrelated inherited token. Explicit UTF-8 decoding is required for the installed executable's Chinese name in the JSON record; the launcher now reads it correctly. It clears the unrelated token, reads the existing workspace, and returns a live console. Real message `243250731880116224` arrived through SSE after this unified restart; receipt updated at `reports/console-realtime-verification.json`.

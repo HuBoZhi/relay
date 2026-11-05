@@ -56,6 +56,12 @@ async function main() {
 
   const result = await build({
     entryPoints: [join(PACKAGE_ROOT, 'src', 'server-entry.mjs')],
+    alias: {
+      '@agent-relay/control-room': join(CONTROL_ROOM, 'dist', 'index.js'),
+      '@agent-relay/sdk': join(PACKAGE_ROOT, '..', 'sdk', 'src', 'index.ts'),
+      '@agent-relay/sdk/messaging': join(PACKAGE_ROOT, '..', 'sdk', 'src', 'messaging', 'index.ts'),
+      '@agent-relay/sdk/session': join(PACKAGE_ROOT, '..', 'sdk', 'src', 'session', 'index.ts'),
+    },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -66,7 +72,8 @@ async function main() {
     legalComments: 'none',
     logLevel: 'warning',
     banner: {
-      js: '// 由 scripts/build.mjs 生成：控制中心服务端打包产物，请勿手工修改。',
+      js: '// 由 scripts/build.mjs 生成：控制中心服务端打包产物，请勿手工修改。\n' +
+        "import { createRequire as createBundleRequire } from 'node:module';\nconst require = createBundleRequire(import.meta.url);",
     },
   });
   if (result.errors.length > 0) throw new Error('服务端打包失败');

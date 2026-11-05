@@ -5,7 +5,6 @@
  * `dist/server.mjs`, so the packaged app needs no node_modules and can never run
  * a copy of the server that differs from the CLI's.
  */
-
 export {
   DemoControlRoomSource,
   RelayControlRoomSource,
@@ -14,3 +13,5 @@ export {
   HttpBridgeAdapter,
   resolveDataRoot,
 } from '@agent-relay/control-room';
+export { createObserverToken } from '@agent-relay/sdk';
+export { default as ObserverWebSocket } from '../lib/observer-websocket.mjs';

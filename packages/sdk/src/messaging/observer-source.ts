@@ -148,6 +148,7 @@ function createRawObserverStream(
       openedHere = true;
       headerCloseStreak = 0;
       for (const handler of openHandlers) handler();
+      for (const handler of anyHandlers) handler({ type: 'open' });
     };
     ws.onmessage = (message: MessageEvent) => {
       let frame: unknown;
@@ -161,6 +162,7 @@ function createRawObserverStream(
     ws.onclose = (event?: { code?: number; reason?: string; wasClean?: boolean }) => {
       if (socket === ws) socket = undefined;
       if (closed) return; // Intentional teardown owns its own cleanup.
+      for (const handler of anyHandlers) handler({ type: 'close' });
       // A close before the first successful open on a header-auth attempt can
       // mean the runtime accepted the options object but ignored the headers
       // (browsers). Only browser-like runtimes downgrade to the query token,
@@ -484,7 +486,11 @@ export function createObserverEventSource(options: ObserverEventSourceOptions): 
         for (const event of page.events) {
           if (event.seq <= cursor) continue;
           advanceCursor(event.seq);
-          emit(normalizeMessagingEvent(event.payload));
+          const normalized = normalizeMessagingEvent(event.payload);
+          // Historical transport events do not describe this observer socket.
+          if (!['connected', 'disconnected', 'reconnecting', 'permanentlyDisconnected', 'error'].includes(normalized.type)) {
+            emit(normalized);
+          }
         }
         // For scoped observer tokens a page can be empty while hidden rows
         // were consumed server-side; `next_since` advances the cursor past

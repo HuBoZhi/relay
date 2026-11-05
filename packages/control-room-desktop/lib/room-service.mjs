@@ -11,6 +11,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { summarize } from './tray-menu.mjs';
+import { observerCredential } from './observer-credential.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DIST_ROOT = join(HERE, '..', 'dist');
@@ -37,13 +38,16 @@ export async function loadServerModule() {
  * A second launch (or another app squatting on 4320) must not leave the user
  * with a dead tray icon, so a busy port moves on instead of failing.
  */
-export async function startRoom({ config, engine = null, log = () => {} }) {
-  const server = await loadServer();
+export async function startRoom({ config, engine = null, log = () => {}, serverModule }) {
+  const server = serverModule ?? await loadServer();
+  const observerToken = config.demo ? undefined : await observerCredential(config, server.createObserverToken);
 
   const source = config.demo
     ? new server.DemoControlRoomSource({ timezone: config.timezone })
     : new server.RelayControlRoomSource({
         workspaceKey: config.token,
+        observerToken,
+        webSocketImpl: server.ObserverWebSocket,
         ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
         timezone: config.timezone,
       });

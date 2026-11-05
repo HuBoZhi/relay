@@ -16,8 +16,8 @@
 
 'use strict';
 
-const { join } = require('node:path');
-const { writeSync } = require('node:fs');
+const { join, dirname } = require('node:path');
+const { writeSync, mkdirSync } = require('node:fs');
 const { writeFile } = require('node:fs/promises');
 
 const {
@@ -33,6 +33,23 @@ const {
   shell,
 } = require('electron');
 
+// Keep the installed app's profile, logs, and child-process scratch alongside its
+// explicitly selected local profile, including launches from Windows login.
+const profileFlagIndex=process.argv.indexOf('--user-data-dir');
+const profilePath = app.commandLine.getSwitchValue('user-data-dir') ||
+  (profileFlagIndex>=0 ? process.argv[profileFlagIndex+1] : '');
+if (profilePath) {
+  const temporaryPath = join(profilePath, 'temp');
+  mkdirSync(temporaryPath, { recursive: true });
+  app.setPath('userData', profilePath);
+  app.setPath('sessionData', profilePath);
+  app.setPath('temp', temporaryPath);
+  app.setAppLogsPath(join(profilePath, 'logs'));
+  process.env.TEMP = temporaryPath;
+  process.env.TMP = temporaryPath;
+  process.env.TMPDIR = temporaryPath;
+}
+
 const APP_ROOT = __dirname;
 const ICON = join(APP_ROOT, 'assets', 'icon.png');
 const TRAY_ICON = join(APP_ROOT, 'assets', 'tray.png');
@@ -43,6 +60,7 @@ const TOPBAR_HEIGHT = 61;
 // Filled by `start()` before any window or tray exists.
 let config = null;
 let buildTrayMenu = null;
+let loginItemCommand = null;
 let trayTooltip = null;
 let startRoom = null;
 let probe = null;
@@ -96,6 +114,7 @@ async function loadHelpers() {
   MENU_ACTIONS = new Set(menuModule.MENU_ACTIONS);
   appMenuModel = menuModule.buildAppMenu({ isPackaged: app.isPackaged });
   buildTrayMenu = trayModule.buildTrayMenu;
+  loginItemCommand = configModule.loginItemCommand;
   trayTooltip = trayModule.trayTooltip;
   startRoom = roomModule.startRoom;
   probe = roomModule.probe;
@@ -233,10 +252,19 @@ async function captureSmokeShot() {
 
 function loginItemEnabled() {
   try {
-    return app.getLoginItemSettings({ openAsHidden: true }).openAtLogin === true;
+    return app.getLoginItemSettings(loginItemOptions()).openAtLogin === true;
   } catch {
     return false;
   }
+}
+
+function loginItemOptions() {
+  return { name: 'RelayControlRoom', ...loginItemCommand(config, {
+    executable:process.execPath,userDataPath:app.getPath('userData'),
+    windowsPowerShell:join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),
+    runtimeRoot:config.workspaceStateFile ? dirname(dirname(config.workspaceStateFile)) : '',
+    consoleDir:dirname(process.execPath),
+  }), openAsHidden:true };
 }
 
 function updateTray() {
@@ -297,7 +325,21 @@ async function toggleLoginAtStartup() {
     return;
   }
   const next = !loginItemEnabled();
-  app.setLoginItemSettings({ openAtLogin: next, openAsHidden: true });
+  if (next && config.token && !config.workspaceStateFile) {
+    // The login item replays this app's command line, so the workspace state
+    // file is what carries the account into the next session. Credentials are
+    // never written into the startup entry itself.
+    void dialog.showMessageBox({
+      type: 'info',
+      title: '无法设置开机启动',
+      message: '请用 --workspace-state 指定本机工作区状态文件后重试',
+      detail: '凭据不会写入启动项；没有状态文件时，开机启动无法恢复上次的工作区。',
+      buttons: ['知道了'],
+      noLink: true,
+    });
+    return;
+  }
+  app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: next });
   if (settings) {
     settings = { ...settings, loginAtStartup: next };
     await settingsApi.saveSettings(settingsFile, settings).catch(() => undefined);
@@ -530,6 +572,7 @@ async function start() {
 
   try {
     config = configModule.resolveConfig();
+    config.profilePath = app.getPath('userData');
   } catch (error) {
     dialog.showErrorBox('无法启动 Relay 协作中枢', error instanceof Error ? error.message : String(error));
     app.exit(1);

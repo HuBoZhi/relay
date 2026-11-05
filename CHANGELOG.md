@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@agent-relay/control-room-desktop`: Windows PowerShell 5.1 recognizes desktop Relay interfaces whose file URLs include query parameters, avoiding false port-conflict reports.
 
+- `@agent-relay/control-room-desktop`: restore realtime updates with a cached read-only stream credential and a Node 20 compatible WebSocket; observer connection status now follows the active socket instead of historical events.
+
+- `@agent-relay/control-room-desktop`: reconnect to the configured workspace after Windows sign-in, retaining tray-only startup, the web address, and local profile paths without storing credentials in the startup command.
+
 ### Added
 
 - `@agent-relay/dispatch-bridge`: a loopback bridge that drives a local desktop client and reports the finished turn back to the task engine. `/dispatch` returns as soon as the prompt is accepted, so the sending chat ends its turn immediately; the bridge alone watches the native turn (no model polling), and reports `completed`, `failed`, or `blocked` with an idempotent callback. An interrupted or permission-blocked turn is never reported as complete, a timeout is left `unconfirmed` instead of being re-sent, and `/deliver` answers `manual` because chat injection is not implemented. `relay-dispatch-bridge --engine <url> --desktop-native <dir>`.
@@ -36,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@agent-relay/control-room-desktop`: the Windows Factory launcher runs through an independent hidden host and writes client logs to files, allowing the Relay startup terminal to close.
 
 - `@agent-relay/control-room-desktop`: Windows unified-start scripts can keep the console under an independent supervisor, restart it after process exit, and expose an explicit stop command and lifecycle log.
+
+- `@agent-relay/control-room-desktop`: start desktop Relay interfaces and the tray console together through one Windows sign-in entry, sharing the existing workspace configuration.
 
 - `@agent-relay/control-room`: a read-only collaboration control room. `node packages/control-room/dist/cli.js` serves a loopback-only web console that shows channels, evidenced agent work state, host placement, and live message flow. Credentials stay in the local process; the browser only receives view models. `--demo` runs the same interface on built-in Chinese demo data.
 
