@@ -1082,6 +1082,17 @@ async function submitTask(form) {
 }
 
 function wire(root) {
+  $$('[name="stageClient"]', root).forEach((select) => {
+    select.onchange = () => {
+      const field = select.closest('[data-stage]')?.querySelector('[name="stagePermission"]');
+      if (field) {
+        field.disabled = select.value !== 'zcode';
+        if (field.disabled) field.value = '';
+      }
+      const form = $('#dispatch-form');
+      if (form) readForm(form);
+    };
+  });
   const chooseDirectory = $('#choose-data-directory', root);
   if (chooseDirectory) chooseDirectory.onclick = async () => {
     try {

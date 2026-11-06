@@ -192,6 +192,13 @@ describe('task workspace rendering', () => {
     ui.click('[data-nav="dispatch"]');
     await settle();
     const window = ui.window;
+    const clientSelect = window.document.querySelector('[name="stageClient"]') as HTMLSelectElement;
+    clientSelect.value = 'codex';
+    clientSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect((window.document.querySelector('[name="stagePermission"]') as HTMLSelectElement).disabled).toBe(true);
+    clientSelect.value = 'zcode';
+    clientSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect((window.document.querySelector('[name="stagePermission"]') as HTMLSelectElement).disabled).toBe(false);
     (window.document.querySelector('[name="stagePermission"]') as HTMLSelectElement).value = 'plan';
     (window.document.querySelector('#f-title') as HTMLInputElement).value = '实现内容主题替换';
     (window.document.querySelector('#f-origin-chat') as HTMLInputElement).value = 'chat_original_7';
