@@ -187,6 +187,7 @@ describe('chat page', () => {
     });
     window.eval(readFileSync(resolve(web, 'icons.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'dialog.js'), 'utf8'));
+    window.eval(readFileSync(resolve(web, 'desktop-menu.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'chat.js'), 'utf8'));
     await settle();
     await settle();

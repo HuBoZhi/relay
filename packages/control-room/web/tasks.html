@@ -8,6 +8,7 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./tasks.css" />
+    <link rel="stylesheet" href="./desktop-menu.css" />
     <link rel="stylesheet" href="./dialog.css" />
     <title>任务工作台 · Relay</title>
   </head>
@@ -29,6 +30,7 @@
         <span>异步协作<span>/</span><strong id="crumb-current">概览</strong></span>
       </div>
       <div class="task-chips">
+        <button id="menu-button" type="button" hidden>菜单</button>
         <span class="chip" id="engine-chip" data-state="unknown" title="任务引擎状态">
           <span data-icon="activity"></span><span id="engine-chip-text">正在读取引擎…</span>
         </span>
@@ -75,9 +77,11 @@
     </div>
 
     <div class="toast" id="toast" role="status" hidden></div>
+    <div id="menu-pop" hidden></div>
 
     <script src="./icons.js"></script>
     <script src="./dialog.js"></script>
+    <script src="./desktop-menu.js"></script>
     <script src="./tasks.js"></script>
   </body>
 </html>

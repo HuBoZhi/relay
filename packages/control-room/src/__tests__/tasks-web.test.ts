@@ -91,7 +91,7 @@ describe('task workspace rendering', () => {
     dom = null;
   });
 
-  async function setup(handler: (call: FetchCall) => unknown) {
+  async function setup(handler: (call: FetchCall) => unknown, configure: (window: any) => void = () => {}) {
     const calls: FetchCall[] = [];
     dom = new JSDOM(readFileSync(resolve(web, 'tasks.html'), 'utf8'), {
       url: 'http://localhost/tasks.html',
@@ -99,6 +99,7 @@ describe('task workspace rendering', () => {
       pretendToBeVisual: true,
     });
     const { window } = dom;
+    configure(window);
     (window as unknown as { EventSource: unknown }).EventSource = class {
       addEventListener() {}
       close() {}
@@ -116,6 +117,7 @@ describe('task workspace rendering', () => {
       };
     });
     window.eval(readFileSync(resolve(web, 'icons.js'), 'utf8'));
+    window.eval(readFileSync(resolve(web, 'desktop-menu.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'tasks.js'), 'utf8'));
     await settle();
     await settle();
@@ -125,6 +127,30 @@ describe('task workspace rendering', () => {
     const text = () => window.document.body.textContent || '';
     return { window, calls, element, click, text };
   }
+
+  it('keeps recovery settings accessible when the task engine cannot be read', async () => {
+    const ui = await setup(() => ({ status: 503, body: { error: '存储暂不可用' } }), (window) => {
+      window.location.hash = '#settings';
+    });
+    expect(ui.text()).toContain('数据与运行');
+  });
+
+  it('preserves unsaved settings across refreshes and hash navigation', async () => {
+    const ui = await setup(() => summaryFixture(), (window) => {
+      window.location.hash = '#settings';
+      window.relayDesktop = { settings: async () => ({ settings: { notifications: true }, packaged: true }) };
+    });
+    const input = ui.element('#f-data-root') as HTMLInputElement;
+    input.value = 'D:\\My Tasks';
+    input.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+    ui.click('#refresh-button');
+    await settle(); await settle();
+    expect((ui.element('#f-data-root') as HTMLInputElement).value).toBe('D:\\My Tasks');
+    ui.window.location.hash = '#overview';
+    ui.window.dispatchEvent(new ui.window.HashChangeEvent('hashchange'));
+    await settle();
+    expect(ui.window.document.body.dataset.view).toBe('overview');
+  });
 
   it('shows the task list and the four status layers separately', async () => {
     const ui = await setup(() => summaryFixture());

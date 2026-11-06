@@ -99,6 +99,7 @@ let unsubscribeEngine = null;
 let settings = null;
 let settingsFile = null;
 let activeSettings = null;
+let needsRestart = false;
 let settingsUpdates = Promise.resolve();
 let win = null;
 let tray = null;
@@ -470,6 +471,8 @@ function zoomBy(delta) {
 
 /** The menu lives in the page, so the shell only exposes named actions. */
 const MENU_HANDLERS = {
+  'open-data-folder': () => void shell.openPath(engine?.dataRoot || app.getPath('userData')),
+  'open-log-folder': () => void shell.openPath(app.getPath('logs')),
   'open-chat': () => void navigate('/chat.html'),
   'open-tasks': () => void navigate('/tasks.html'),
   'open-observer': () => void navigate('/'),
@@ -484,6 +487,11 @@ const MENU_HANDLERS = {
   reload: () => {
     const contents = webContents();
     if (contents) contents.reload();
+  },
+  restart: () => {
+    app.relaunch({ args: process.argv.slice(1).filter((arg) => arg !== '--no-window') });
+    quitting = true;
+    app.quit();
   },
   'zoom-reset': () => {
     const contents = webContents();
@@ -527,6 +535,7 @@ function settingsView() {
     version: app.getVersion(),
     packaged: app.isPackaged,
     loginAtStartup: loginItemEnabled(),
+    restartRequired: needsRestart,
     bridge: managedBridge
       ? { running: Boolean(managedBridge.url), url: managedBridge.url, port: managedBridge.port, managed: true }
       : null,
@@ -547,14 +556,22 @@ function updateSettings(patch) {
         app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: enabled });
       },
     });
+    needsRestart = settingsNeedRestart(activeSettings, settings);
     updateTray();
-    return { ...settingsView(), restartRequired: settingsNeedRestart(activeSettings, settings) };
+    return settingsView();
   });
   settingsUpdates = pending;
   return pending;
 }
 
 function registerIpc() {
+  ipcMain.handle('desktop:settings:choose-directory', async () => {
+    const result = await dialog.showOpenDialog(win, {
+      title: '选择任务数据目录', defaultPath: settings?.dataRoot || engine?.dataRoot,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
   ipcMain.handle('desktop:menu', () => appMenuModel);
   ipcMain.handle('desktop:run', (_event, id) => runMenuAction(String(id)));
   ipcMain.handle('desktop:settings:get', () => settingsView());

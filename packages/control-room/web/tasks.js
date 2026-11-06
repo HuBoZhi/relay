@@ -102,6 +102,7 @@ const state = {
   issues: [],
   loading: false,
   desktop: null,
+  settingsDraft: null,
 };
 
 /* ------------------------------------------------------------------ helpers */
@@ -176,6 +177,8 @@ async function api(path, options = {}) {
 }
 
 function setView(view, extra = {}) {
+  const form = $('#dispatch-form');
+  if (form) readForm(form);
   state.view = view;
   Object.assign(state, extra);
   if (view !== 'dispatch') state.receipt = null;
@@ -305,7 +308,12 @@ function renderRail() {
 
 function render() {
   const main = $('#main');
-  if (!state.summary) {
+  const focused = main.contains(document.activeElement) ? document.activeElement : null;
+  const focusedId = focused?.id;
+  const selection = focused && 'selectionStart' in focused ? [focused.selectionStart, focused.selectionEnd] : null;
+  const existingForm = $('#dispatch-form');
+  if (existingForm) readForm(existingForm);
+  if (!state.summary && state.view !== 'settings') {
     main.innerHTML = `<div class="card"><div class="empty">任务引擎当前不可用。<br>界面只读取本地任务接口，不会自行创建任务或会话。</div></div>`;
     paintIcons(main);
     return;
@@ -317,6 +325,11 @@ function render() {
   else main.innerHTML = renderOverview();
   wire(main);
   paintIcons(main);
+  const restored = focusedId && document.getElementById(focusedId);
+  if (restored) {
+    restored.focus({ preventScroll: true });
+    if (selection && restored.setSelectionRange) restored.setSelectionRange(...selection);
+  }
 }
 
 function tasksForView() {
@@ -579,7 +592,7 @@ function renderClients() {
 }
 
 function renderSettings() {
-  const summary = state.summary;
+  const summary = state.summary || { dataRoot: state.desktop?.effectiveDataRoot || '暂不可用', topics: [], tasks: [], warnings: ['任务引擎暂不可用，可修改设置后重新启动。'] };
   return `
     ${renderDesktopSettings()}
     <div class="card">
@@ -596,7 +609,8 @@ function renderSettings() {
           : '<p class="hint-text">数据目录不在系统盘。</p>'
       }
     </div>
-    <div class="card">
+    <details class="card">
+      <summary>开发者接口（高级）</summary>
       <div class="card-head"><h2>接口</h2><span class="hint">Agent 与界面使用同一套状态和幂等逻辑</span></div>
       <div class="table-wrap"><table class="grid"><thead><tr><th>用途</th><th>方法与路径</th></tr></thead><tbody>
         <tr><td>提交任务（立即返回回执）</td><td class="mono">POST /api/async/tasks</td></tr>
@@ -610,7 +624,7 @@ function renderSettings() {
       <p class="hint-text">
         派发接口返回 202 即表示已受理并持久化；发送方据此结束本轮，不等待模型，也不轮询。
       </p>
-    </div>`;
+    </details>`;
 }
 
 /**
@@ -621,7 +635,9 @@ function renderSettings() {
  */
 function renderDesktopSettings() {
   if (!state.desktop) return '';
-  const settings = state.desktop.settings || {};
+  const settings = { ...state.desktop.settings,
+    loginAtStartup: state.desktop.loginAtStartup ?? state.desktop.settings?.loginAtStartup,
+    ...state.settingsDraft };
   return `<div class="card">
     <div class="card-head">
       <h2>桌面应用设置</h2>
@@ -636,11 +652,15 @@ function renderDesktopSettings() {
       <div class="field">
         <label for="f-data-root">任务数据目录</label>
         <input id="f-data-root" name="dataRoot" value="${esc(settings.dataRoot || '')}" placeholder="留空则自动选择非系统盘" />
+        ${window.relayDesktop?.chooseDataDirectory ? '<button type="button" id="choose-data-directory">选择文件夹…</button>' : ''}
         <span class="hint-text">当前生效：<span class="mono">${esc(state.desktop.effectiveDataRoot || '未知')}</span> · 修改后下次启动生效</span>
       </div>
       <div class="form-actions">
         <button class="button-primary" type="submit">保存设置</button>
-        <span class="hint-text" id="settings-note">${state.desktop.packaged ? '' : '开发模式不会写入开机启动项'}</span>
+        <button type="button" data-desktop-action="open-data-folder">打开数据文件夹</button>
+        <button type="button" data-desktop-action="open-log-folder">打开日志文件夹</button>
+        ${state.desktop.restartRequired ? '<button type="button" data-desktop-action="restart">重新启动以应用更改</button>' : ''}
+        <span class="hint-text" id="settings-note">${state.settingsDraft ? '有未保存的更改' : state.desktop.packaged ? '' : '开发模式不会写入开机启动项'}</span>
       </div>
     </form>
     <div class="bridge-block">
@@ -1016,6 +1036,7 @@ async function patchDesktop(patch, message) {
     render();
   } catch (error) {
     toast(error.message || '保存设置失败', 'bad');
+    render();
   }
 }
 
@@ -1049,6 +1070,20 @@ async function submitTask(form) {
 }
 
 function wire(root) {
+  const chooseDirectory = $('#choose-data-directory', root);
+  if (chooseDirectory) chooseDirectory.onclick = async () => {
+    try {
+      const path = await window.relayDesktop.chooseDataDirectory();
+      if (path) {
+        const input = $('#f-data-root');
+        input.value = path;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } catch { toast('无法打开目录选择器，请直接填写目录。', 'bad'); }
+  };
+  $$('[data-desktop-action]', root).forEach((button) => {
+    button.onclick = () => void window.relayDesktop.run(button.dataset.desktopAction);
+  });
   $$('[data-open]', root).forEach((button) => {
     button.onclick = async () => {
       const taskId = button.dataset.open;
@@ -1085,9 +1120,21 @@ function wire(root) {
 
   const settingsForm = $('#desktop-settings', root);
   if (settingsForm) {
+    settingsForm.oninput = () => {
+      const data = new FormData(settingsForm);
+      state.settingsDraft = {
+        closeToTray: data.get('closeToTray') === 'on', notifications: data.get('notifications') === 'on',
+        loginAtStartup: data.get('loginAtStartup') === 'on', dataRoot: String(data.get('dataRoot') || ''),
+      };
+      $('#settings-note').textContent = '有未保存的更改';
+    };
     settingsForm.onsubmit = async (event) => {
       event.preventDefault();
+      if (state.savingSettings) return;
       const data = new FormData(settingsForm);
+      state.savingSettings = true;
+      const submit = settingsForm.querySelector('[type=submit]');
+      submit.disabled = true;
       try {
         const result = await window.relayDesktop.patchSettings({
           closeToTray: data.get('closeToTray') === 'on',
@@ -1096,11 +1143,16 @@ function wire(root) {
           dataRoot: String(data.get('dataRoot') || ''),
         });
         state.desktop = result;
+        state.settingsDraft = null;
         toast('设置已保存');
-        if (result.restartRequired) toast('数据目录将在下次启动生效');
+        if (result.restartRequired) toast('设置已保存，部分更改将在重新启动后生效');
         render();
       } catch (error) {
         toast(error.message || '保存设置失败', 'bad');
+      } finally {
+        state.savingSettings = false;
+        const again = $('#desktop-settings [type=submit]');
+        if (again) again.disabled = false;
       }
     };
   }
@@ -1268,6 +1320,7 @@ $$('[data-nav]').forEach((button) => {
   button.onclick = () => {
     state.topic = button.dataset.nav === 'overview' ? state.topic : null;
     setView(button.dataset.nav);
+    history.replaceState(null, '', `#${button.dataset.nav}`);
   };
 });
 
@@ -1298,10 +1351,14 @@ async function applyHash() {
     setView('settings');
     return true;
   }
+  if (['overview', 'dispatch', 'clients'].includes(hash)) { setView(hash); return true; }
   return false;
 }
 
+window.addEventListener('hashchange', () => void applyHash().catch((error) => toast(error.message, 'bad')));
+
 void (async () => {
+  window.relayMountDesktopMenu?.();
   await loadSummary();
   await loadDesktopSettings();
   const routed = await applyHash();

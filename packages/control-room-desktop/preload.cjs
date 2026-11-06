@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('relayDesktop', {
   run: (id) => ipcRenderer.invoke('desktop:run', String(id)),
   settings: () => ipcRenderer.invoke('desktop:settings:get'),
   patchSettings: (patch) => ipcRenderer.invoke('desktop:settings:patch', patch),
+  chooseDataDirectory: () => ipcRenderer.invoke('desktop:settings:choose-directory'),
 });

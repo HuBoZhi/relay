@@ -3,6 +3,13 @@ import { DEFAULT_SETTINGS } from '../lib/settings.mjs';
 import { applySettingsPatch, settingsNeedRestart } from '../lib/settings-transaction.mjs';
 
 describe('desktop settings transaction', () => {
+  it('rejects relative and C-drive task roots before writing preferences', async () => {
+    const save = vi.fn();
+    for (const dataRoot of ['relative-folder', 'C:\\Tasks']) {
+      await expect(applySettingsPatch(DEFAULT_SETTINGS, { dataRoot }, { save, applyLogin() {}, loginEnabled: false })).rejects.toThrow();
+    }
+    expect(save).not.toHaveBeenCalled();
+  });
   it('rejects failed persistence without changing login startup or current settings', async () => {
     const current = { ...DEFAULT_SETTINGS };
     const applyLogin = vi.fn();

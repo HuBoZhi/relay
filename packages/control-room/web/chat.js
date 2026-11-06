@@ -998,54 +998,6 @@ function connectStream() {
  * In the packaged app there is no native menu bar, so the page renders the same
  * model the shell exposes. In a browser none of this runs.
  */
-async function mountDesktopMenu() {
-  const bridge = window.relayDesktop;
-  if (!bridge || typeof bridge.menu !== 'function') return;
-  document.body.classList.add('is-desktop');
-  const button = $('#menu-button');
-  const pop = $('#menu-pop');
-  if (!button || !pop) return;
-  button.hidden = false;
-  let model = null;
-  button.onclick = async () => {
-    if (pop.hidden) {
-      if (!model) {
-        try {
-          model = await bridge.menu();
-        } catch {
-          model = [];
-        }
-      }
-      pop.innerHTML = (model || [])
-        .map(
-          (group) =>
-            `<div class="group">${esc(group.label)}</div>${group.items
-              .map((item) =>
-                item.type === 'separator'
-                  ? '<hr />'
-                  : `<button type="button" data-menu="${esc(item.id)}">${esc(item.label)}</button>`
-              )
-              .join('')}`
-        )
-        .join('');
-      pop.hidden = false;
-      $$('[data-menu]', pop).forEach((item) => {
-        item.onclick = () => {
-          pop.hidden = true;
-          void bridge.run(item.dataset.menu);
-        };
-      });
-    } else {
-      pop.hidden = true;
-    }
-  };
-  document.addEventListener('click', (event) => {
-    if (pop.hidden) return;
-    if (pop.contains(event.target) || button.contains(event.target)) return;
-    pop.hidden = true;
-  });
-}
-
 $('#me-select').onchange = () => {
   state.me.agentId = $('#me-select').value;
   if (/^chat_(relay|codex|zcode|workbuddy|factory)_main$/.test(state.me.chatId)) {
@@ -1063,7 +1015,7 @@ void (async () => {
   loadMe();
   renderMe();
   paintIcons();
-  void mountDesktopMenu();
+  window.relayMountDesktopMenu?.();
   await loadGroups();
   const hash = String(window.location.hash || '').replace(/^#/, '');
   const fromHash = hash.startsWith('group=') ? decodeURIComponent(hash.slice(6)) : null;

@@ -13,7 +13,8 @@
  */
 
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { dirname, resolve, isAbsolute } from 'node:path';
 
 export const SETTINGS_VERSION = 1;
 
@@ -35,8 +36,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 function isLoopback(url) {
   try {
-    const host = new URL(url).hostname;
-    return ['127.0.0.1', 'localhost', '::1'].includes(host);
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname);
   } catch {
     return false;
   }
@@ -71,7 +72,7 @@ export function normalizeSettings(raw) {
 export async function loadSettings(file) {
   try {
     const raw = await readFile(file, 'utf8');
-    return normalizeSettings(JSON.parse(raw));
+    return normalizeSettings(JSON.parse(raw.replace(/^\uFEFF/, '')));
   } catch {
     // A missing or unreadable settings file must not stop the app from opening.
     return { ...DEFAULT_SETTINGS, bridges: [] };
@@ -98,6 +99,15 @@ export function mergeSettings(current, patch) {
   if (!patch || typeof patch !== 'object') return next;
   if ('dataRoot' in patch) {
     const value = patch.dataRoot;
+    if (typeof value === 'string' && value.trim()) {
+      if (!isAbsolute(value.trim())) throw new Error('请选择完整的任务数据目录路径。');
+      if (/^C:[\\/]/i.test(value.trim())) throw new Error('请选择 D 盘或其他非 C 盘的数据目录。');
+      let ancestor = resolve(value.trim());
+      while (!existsSync(ancestor) && dirname(ancestor) !== ancestor) ancestor = dirname(ancestor);
+      if (existsSync(ancestor) && /^C:[\\/]/i.test(realpathSync(ancestor))) {
+        throw new Error('此目录实际指向 C 盘，请选择其他位置。');
+      }
+    }
     next.dataRoot = typeof value === 'string' && value.trim() ? resolve(value.trim()) : null;
   }
   if ('closeToTray' in patch) next.closeToTray = patch.closeToTray === true;

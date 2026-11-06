@@ -304,6 +304,13 @@ describe('desktop settings', () => {
     expect(await loadSettings(path)).toMatchObject({ version: SETTINGS_VERSION });
   });
 
+  it('loads Windows UTF-8 BOM preferences and keeps IPv6 HTTP bridges', async () => {
+    const path = await settingsFile();
+    await writeFile(path, '\uFEFF' + JSON.stringify({ connectors: ['factory'], closeToTray: true }));
+    expect(await loadSettings(path)).toMatchObject({ connectors: ['factory'], closeToTray: true });
+    expect(normalizeSettings({ bridges: [{ client: 'factory', url: 'http://[::1]:7901' }] }).bridges).toHaveLength(1);
+  });
+
   it('round-trips a saved patch and ignores unknown keys', async () => {
     const path = await settingsFile();
     const merged = mergeSettings(DEFAULT_SETTINGS, {
