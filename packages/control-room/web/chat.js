@@ -30,6 +30,10 @@ const AGENTS = [
   { id: 'factory', label: 'Factory', app: 'factory' },
 ];
 
+// The operator speaks as Relay; the agents below are only who Relay can @.
+// Relay must never appear as a mention target, so it stays out of AGENTS.
+const IDENTITIES = [{ id: 'relay', label: 'Relay', app: 'relay' }, ...AGENTS];
+
 const AGENT_DEFAULTS = {
   codex: { model: 'gpt-5-codex', reasoning: 'high' },
   zcode: { model: 'GLM-5.3-Flash', reasoning: 'max' },
@@ -88,7 +92,7 @@ const state = {
 /* ------------------------------------------------------------------ helpers */
 
 function agentLabel(id) {
-  return AGENTS.find((agent) => agent.id === id)?.label ?? id;
+  return IDENTITIES.find((agent) => agent.id === id)?.label ?? id;
 }
 
 function badge(map, value) {
@@ -152,8 +156,8 @@ function loadMe() {
     }
   })();
   state.me =
-    stored && stored.agentId ? stored : { agentId: 'codex', chatId: 'chat_codex_main', device: 'desktop-01' };
-  if (!state.me.chatId) state.me.chatId = 'chat_codex_main';
+    stored && stored.agentId ? stored : { agentId: 'relay', chatId: 'chat_relay_main', device: 'desktop-01' };
+  if (!state.me.chatId) state.me.chatId = `chat_${state.me.agentId}_main`;
   if (!state.me.device) state.me.device = 'desktop-01';
 }
 
@@ -177,7 +181,7 @@ function senderPayload() {
 
 function renderMe() {
   const select = $('#me-select');
-  select.innerHTML = AGENTS.map(
+  select.innerHTML = IDENTITIES.map(
     (agent) =>
       `<option value="${agent.id}"${agent.id === state.me.agentId ? ' selected' : ''}>${agent.label}</option>`
   ).join('');

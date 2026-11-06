@@ -319,7 +319,7 @@ describe('chat page', () => {
     expect(posted).toBeTruthy();
     const payload = JSON.parse(String(posted?.init?.body)) as { name: string; creator: { agentId: string } };
     expect(payload.name).toBe('20261105-三联联调');
-    expect(payload.creator.agentId).toBe('codex');
+    expect(payload.creator.agentId).toBe('relay');
   });
 
   it('never falls back to a native dialog, which a desktop window answers with null', () => {
@@ -345,6 +345,6 @@ describe('chat page', () => {
     expect(payload.mentions[0]?.target).toBe('zcode');
     expect(payload.mentions[0]?.client).toBeUndefined();
     expect(payload.mentions[0]?.project).toBeUndefined();
-    expect(payload.sender.agentId).toBe('codex');
+    expect(payload.sender.agentId).toBe('relay');
   });
 });
