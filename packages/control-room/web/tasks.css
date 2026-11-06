@@ -1,3 +1,24 @@
+.client-intro > p { line-height: 1.8; color: var(--muted); }
+.client-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 0; list-style: none; margin: 20px 0; }
+.client-steps li { padding: 14px; background: var(--panel-deep); border: 1px solid var(--line); border-radius: 8px; }
+.client-steps b, .client-steps span { display: block; }
+.client-steps b { color: var(--cyan); margin-bottom: 6px; }
+.client-steps span { color: var(--muted); font-size: 12px; }
+.client-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; }
+.client-card { min-width: 0; }
+.client-card p { line-height: 1.7; overflow-wrap: anywhere; }
+.client-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; }
+.client-actions a { text-decoration: none; }
+.client-diagnostics { border-top: 1px solid var(--line); padding-top: 14px; }
+.client-diagnostics summary { cursor: pointer; color: var(--muted); }
+.client-diagnostics dl { margin: 14px 0; display: grid; gap: 10px; }
+.client-diagnostics dl > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.client-diagnostics dt { color: var(--muted); }
+.client-diagnostics dd { margin: 0; }
+.client-error { border-left: 2px solid var(--warn); padding: 10px 12px; background: #33281955; overflow-wrap: anywhere; }
+.client-error p { margin: 6px 0; }
+.client-error span { color: var(--muted); font-size: 12px; }
+@media (max-width: 800px) { .client-steps { grid-template-columns: 1fr; gap: 8px; } }
 /* Task workspace. Shares the observer's palette and type scale; the layout is
    its own because a dispatch form and a status matrix are not a graph. */
 

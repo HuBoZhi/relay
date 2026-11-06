@@ -13,7 +13,9 @@
     <link rel="stylesheet" href="./room.css" />
     <link rel="stylesheet" href="./command.css" />
     <link rel="stylesheet" href="./desktop.css" />
-    <title>协作控制中心 · Relay</title>
+    <link rel="stylesheet" href="./desktop-menu.css" />
+    <link rel="stylesheet" href="./workspace-shell.css" />
+    <title>观察台 · Relay</title>
   </head>
   <body data-page="overview">
     <div class="ambient-field" aria-hidden="true">
@@ -21,6 +23,7 @@
       <div class="ambient-orbit orbit-one"></div>
       <div class="ambient-orbit orbit-two"></div>
     </div>
+    <script src="./desktop-menu.js"></script>
     <div class="app-shell">
       <aside class="sidebar" aria-label="频道导航">
         <a class="brand" href="./" aria-label="协作控制中心首页">
@@ -289,6 +292,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./icons.js"></script>
     <script src="./api.js"></script>
+    <script src="./workspace-shell.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

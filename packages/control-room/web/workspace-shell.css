@@ -1,0 +1,55 @@
+/* Shared application frame; individual pages own only their working content. */
+.unified-workspace {
+  --bg: #0a1117; --panel: #0e181f; --panel-deep: #0b131a;
+  --line: #24343f; --muted: #8b9daa; --text: #dde7ed; --cyan: #67e7df;
+  --workspace-sidebar: 264px;
+  background: var(--bg);
+}
+.workspace-header {
+  height: 61px; min-height: 61px; position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 24px; padding: 0 20px;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+.is-desktop .workspace-header { padding-right: 152px; }
+.workspace-header a, .workspace-header button { -webkit-app-region: no-drag; }
+.workspace-brand { color: var(--cyan); font-size: 20px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.workspace-brand small { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 8px; }
+.workspace-nav, .workspace-tools { display: flex; align-items: center; gap: 6px; }
+.workspace-tools { margin-left: auto; }
+.workspace-header nav a, .workspace-tools a { padding: 8px 12px; border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.workspace-nav a[aria-current] { background: #193238; color: var(--cyan); }
+.workspace-header a:focus-visible, .workspace-header button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.workspace-header #menu-button { font-size: 13px; }
+.unified-workspace #menu-pop { top: 55px; right: 20px; }
+.unified-workspace.is-desktop #menu-pop { right: 152px; }
+.unified-workspace .task-brand, .unified-workspace .chat-brand,
+.unified-workspace .sidebar > .brand, .unified-workspace #chat-button,
+.unified-workspace #tasks-button, .unified-workspace #app-menu,
+.unified-workspace #topbar-divider, .unified-workspace .breadcrumb-code,
+.unified-workspace .crumb-code, .unified-workspace .task-chips > a,
+.unified-workspace .chat-actions > a { display: none !important; }
+.unified-workspace .task-topbar, .unified-workspace .chat-topbar,
+.unified-workspace .topbar { position: static; height: 52px; min-height: 52px; padding: 0 20px; -webkit-app-region: no-drag; }
+.unified-workspace .app-shell { height: calc(100dvh - 61px); min-height: 0; grid-template-columns: var(--workspace-sidebar) minmax(0, 1fr); }
+.unified-workspace .chat-shell { grid-template-columns: var(--workspace-sidebar) minmax(0, 1fr); }
+.unified-workspace .task-shell { grid-template-columns: var(--workspace-sidebar) minmax(0, 1fr); padding: 0; gap: 0; }
+.unified-workspace .rail { top: 61px; border: 0; border-right: 1px solid var(--line); border-radius: 0; min-height: calc(100dvh - 113px); max-height: calc(100dvh - 61px); background: var(--panel); }
+.unified-workspace .task-main { padding: 20px; min-width: 0; }
+.unified-workspace .sidebar, .unified-workspace .conversations { padding: 16px 14px; background: var(--panel); }
+.unified-workspace .workspace { border-top: 0; }
+.unified-workspace .task-crumbs { display: flex; }
+.unified-workspace #data-root-chip { display: none; }
+@media (hover: hover) { .workspace-header a:hover { background: #17272e; color: var(--text); } }
+@media (max-width: 900px) {
+  .unified-workspace { --workspace-sidebar: 210px; }
+  .workspace-header { gap: 8px; padding-left: 12px; }
+  .workspace-brand small { display: none; }
+  .workspace-header nav a, .workspace-tools a { padding: 8px; font-size: 12px; }
+}
+@media (max-width: 640px) {
+  .workspace-header { flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 8px; }
+  .workspace-tools { width: 100%; margin-left: 0; }
+  .unified-workspace .task-shell, .unified-workspace .chat-shell, .unified-workspace .app-shell { grid-template-columns: 150px minmax(0, 1fr); }
+  .unified-workspace .task-main { padding: 12px; }
+}

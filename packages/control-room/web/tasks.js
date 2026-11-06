@@ -543,52 +543,43 @@ function clientBadge(value) {
 
 function renderClients() {
   const clients = state.summary.clients || [];
-  return `
-    <div class="card">
-      <div class="card-head">
-        <h2>客户端接入</h2>
-        <span class="hint">“未验证”不是“已连接”：每项能力独立核验</span>
-      </div>
-      <div class="table-wrap">
-        <table class="grid">
-          <thead><tr>
-            <th>客户端</th><th>版本</th><th>接口</th><th>可见会话</th><th>项目归属</th><th>账户/模型/思考</th>
-            <th>提交即返回</th><th>结束事件</th><th>业务回传</th><th>原聊天注入</th><th>繁忙排队</th><th>最近成功</th><th></th>
-          </tr></thead>
-          <tbody>
-            ${clients
-              .map(
-                (client) => `<tr>
-                  <td><strong>${esc(client.label)}</strong><br><span class="mono muted">${esc(client.client)}</span></td>
-                  <td class="mono">${esc(client.version || '未知')}</td>
-                  <td>${clientBadge(client.interfaceReady)}</td>
-                  <td>${clientBadge(client.canCreateVisibleSession)}</td>
-                  <td>${clientBadge(client.canBindProject)}</td>
-                  <td>${clientBadge(client.canSpecifyAccountModelReasoning)}</td>
-                  <td>${clientBadge(client.submitReturns)}</td>
-                  <td>${clientBadge(client.turnEndEvent)}</td>
-                  <td>${clientBadge(client.businessCallback)}</td>
-                  <td>${clientBadge(client.chatInjection.state)}<br><span class="hint-text">${esc(client.chatInjection.reason)}</span></td>
-                  <td>${clientBadge(client.busyQueueing)}</td>
-                  <td class="mono muted">${esc(timeLabel(client.lastSuccessAt))}</td>
-                  <td><button class="button-ghost" type="button" data-probe="${esc(client.client)}">单次探测</button></td>
-                </tr>
-                ${
-                  client.notes.length > 0 || client.lastError
-                    ? `<tr><td colspan="13" class="hint-text">${esc(client.notes.join('  '))}${
-                        client.lastError ? ` · 最近错误：${esc(client.lastError)}` : ''
-                      }</td></tr>`
-                    : ''
-                }`
-              )
-              .join('')}
-          </tbody>
-        </table>
-      </div>
-      <p class="hint-text">
-        探测只发起一次显式检查，不进入定时轮询。原聊天注入一栏只有在观察到回传真正进入同一聊天后才会变为“支持”。
-      </p>
-    </div>`;
+  const instructions = {
+    zcode: '打开 ZCode 并进入需要协作的项目。在设置中选择桌面连接或 MCP 连接；使用 MCP 时先填写服务配置。',
+    workbuddy: '打开 WorkBuddy 并进入项目，保持客户端运行，然后检查连接。',
+    factory: '打开 Factory 并进入项目，保持客户端运行，然后检查连接。',
+    codex: '打开 ChatGPT / Codex。此处只显示已验证的能力；接口尚未验证时，先检查连接并查看诊断。',
+  };
+  const capabilities = [
+    ['canCreateVisibleSession', '创建可见会话'], ['canBindProject', '读取项目'],
+    ['canSpecifyAccountModelReasoning', '选择账户、模型与思考强度'],
+    ['submitReturns', '提交后立即返回'], ['turnEndEvent', '接收结束事件'],
+    ['businessCallback', '接收业务结果'], ['busyQueueing', '繁忙时排队'],
+  ];
+  return `<section class="card client-intro">
+    <div class="card-head"><h2>连接你的 AI 客户端</h2></div>
+    <p>先打开客户端，再检查连接。连接通过后，去群聊选择 Agent、模型和项目，即可派发任务。</p>
+    <ol class="client-steps"><li><b>1 · 打开客户端</b><span>登录并进入要使用的项目</span></li>
+      <li><b>2 · 检查连接</b><span>在下面选择客户端进行检查</span></li>
+      <li><b>3 · 开始协作</b><span>去群聊 @ Agent，或在任务工作台派发</span></li></ol>
+    <p class="hint-text">连接检查只验证接口是否可用。任务执行、结果回传和回到原聊天的能力，需要实际任务分别验证。</p>
+  </section><div class="client-cards">${clients.map((client) => {
+    const ready = client.interfaceReady === 'supported';
+    const label = ready ? '接口可用' : client.interfaceReady === 'unsupported' ? '接口不可用' : '等待检查';
+    return `<section class="card client-card" data-client="${esc(client.client)}">
+      <div class="card-head"><h2>${esc(client.label)}</h2><span class="badge ${ready ? 'ok' : 'idle'}">${label}</span></div>
+      <p>${esc(instructions[client.client] || '打开客户端并进入项目，然后检查连接。')}</p>
+      <p class="hint-text">版本：${esc(client.version || '尚未读取')} · 最近任务成功：${esc(timeLabel(client.lastSuccessAt))}</p>
+      ${client.lastError ? `<div class="client-error" role="status"><b>需要处理</b><p>${esc(client.lastError)}</p><span>确认客户端已启动；检查下方诊断与连接设置后重试。</span></div>` : ''}
+      <div class="client-actions"><button class="button" type="button" data-probe="${esc(client.client)}">检查连接</button>
+        ${ready ? '<a class="button" href="./chat.html">去群聊派活</a><button class="button-ghost" type="button" data-action="dispatch">派发任务</button>' : ''}
+        <a href="./tasks.html#settings" class="link-button">连接设置</a></div>
+      <details class="client-diagnostics"><summary>能力与连接诊断</summary>
+        <dl>${capabilities.map(([key, name]) => `<div><dt>${name}</dt><dd>${clientBadge(client[key])}</dd></div>`).join('')}
+          <div><dt>回到原聊天</dt><dd>${clientBadge(client.chatInjection.state)}</dd></div></dl>
+        <p class="hint-text">${esc(client.chatInjection.reason)}</p>
+        ${(client.notes || []).map((note) => `<p class="hint-text">${esc(note)}</p>`).join('')}
+      </details></section>`;
+  }).join('')}</div>`;
 }
 
 function renderSettings() {
@@ -1252,6 +1243,7 @@ function wire(root) {
   $$('[data-probe]', root).forEach((button) => {
     button.onclick = async () => {
       button.disabled = true;
+      button.textContent = '正在检查…';
       try {
         const client = await api(`/api/async/clients/${encodeURIComponent(button.dataset.probe)}/probe`, {
           method: 'POST',
