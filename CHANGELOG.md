@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room-desktop`: exit waits for owned services and pending settings writes, cancels bridge startup, and handles bridge process errors without leaving an orphan child or crashing the shell.
+
 - `@agent-relay/control-room-desktop`: settings changes report disk or Windows startup failures without changing live preferences, and connector changes consistently require a restart until applied.
 
 - `@agent-relay/control-room-desktop`: launch the native Windows app directly, keep login startup in the tray, and bootstrap integrated clients after the window appears so slow bridges do not make launch look unresponsive.

@@ -46,10 +46,12 @@ export async function startManagedBridge({
   env = process.env,
   log = () => {},
   executablePath = process.execPath,
+  signal,
 } = {}) {
   let lastError = null;
 
   for (let attempt = 0; attempt < PORT_ATTEMPTS; attempt += 1) {
+    if (signal?.aborted) break;
     const port = preferredPort + attempt;
     const child = spawn(
       executablePath,
@@ -71,7 +73,17 @@ export async function startManagedBridge({
     );
 
     let exited = false;
+    let spawned = false;
     let exitCode = null;
+    child.once('spawn', () => { spawned = true; });
+    const abort = () => child.kill();
+    signal?.addEventListener('abort', abort, { once: true });
+    child.on('error', (error) => {
+      lastError = error.message;
+      exited = true;
+      exitCode = -1;
+      signal?.removeEventListener('abort', abort);
+    });
     child.stdout.on('data', (chunk) => {
       for (const line of String(chunk).split('\n')) {
         if (line.trim()) log(`[桥接] ${line.trim()}`);
@@ -83,14 +95,15 @@ export async function startManagedBridge({
       }
     });
     child.on('exit', (code) => {
+      signal?.removeEventListener('abort', abort);
       exited = true;
       exitCode = code;
     });
 
     const url = `http://127.0.0.1:${port}`;
     const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline && !exited) {
-      if (await healthy(url)) {
+    while (Date.now() < deadline && !exited && !signal?.aborted) {
+      if (spawned && await healthy(url) && !exited && !signal?.aborted) {
         log(`[桥接] 已随应用启动：${url}`);
         return {
           url,

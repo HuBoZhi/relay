@@ -107,6 +107,10 @@ let statusError = null;
 let taskCounts = null;
 let probedAt = null;
 let quitting = false;
+let shutdownPending = null;
+let shutdownComplete = false;
+let pendingShow = false;
+const lifecycleAbort = new AbortController();
 let hideNoticed = false;
 let statusTimer = null;
 let smokeShotDone = false;
@@ -152,6 +156,8 @@ async function loadHelpers() {
 }
 
 function showWindow() {
+  if (quitting) return;
+  if (!room) { pendingShow = true; return; }
   if (!win || win.isDestroyed()) {
     void createWindow();
     return;
@@ -220,7 +226,7 @@ async function createWindow() {
   });
 
   win.once('ready-to-show', () => {
-    if (config.showWindow || config.smoke) win.show();
+    if (config.showWindow || config.smoke || pendingShow) win.show();
   });
 
   win.on('close', (event) => {
@@ -608,10 +614,11 @@ async function startBridges() {
       dataDir: resolve(engine.dataRoot, '..', 'bridge'),
       desktopNativeDir: settings.desktopNativeDir || 'D:/Programs/AgentRelay/desktop-native',
       preferredPort: settings.bridgePort || 7901,
+      signal: lifecycleAbort.signal,
       log: (line) => console.log(line),
     });
   }
-  if (!engine) return;
+  if (!engine || quitting) return;
   const registered = new Set();
   if (managedBridge && managedBridge.url) {
     for (const client of settings.connectors || []) {
@@ -679,6 +686,7 @@ async function start() {
   // Show the window first. Slow client/bootstrap calls must never leave an icon
   // that appears unresponsive for the bridge's entire retry deadline.
   await startBridges().catch((error) => recordFailure('派发桥接启动失败', error));
+  if (quitting) return;
   const { startSystemClients } = await import('./lib/system-startup.mjs');
   if (!config.smoke) startSystemClients(config, { consoleDir: dirname(process.execPath) });
   await refreshStatus();
@@ -705,10 +713,24 @@ if (!locked) {
   // A second launch is a request to show the window that is already running.
   app.quit();
 } else {
-  app.on('second-instance', showWindow);
-  app.on('before-quit', () => {
+  app.on('second-instance', (_event, argv) => { if (!argv.includes('--no-window')) showWindow(); });
+  app.on('before-quit', (event) => {
+    if (shutdownComplete) return;
+    event.preventDefault();
     quitting = true;
+    lifecycleAbort.abort();
     if (statusTimer) clearInterval(statusTimer);
+    if (!shutdownPending) {
+      shutdownPending = import('./lib/shutdown.mjs').then(({ shutdownDesktop }) =>
+        shutdownDesktop({ unsubscribe: unsubscribeEngine, room, engine, bridge: managedBridge, settingsUpdates })
+      ).then((result) => {
+        if (result.timedOut) recordFailure('退出超时', '资源未在 5 秒内释放');
+        for (const error of result.errors) recordFailure('退出清理失败', error);
+      }).catch((error) => recordFailure('退出失败', error)).finally(() => {
+        shutdownComplete = true;
+        app.quit();
+      });
+    }
   });
   app.on('window-all-closed', () => {
     // Tray mode keeps running with no window; otherwise closing the window is a
@@ -717,21 +739,8 @@ if (!locked) {
     quitting = true;
     app.quit();
   });
-  app.whenReady().then(start, (error) => {
+  app.whenReady().then(start).catch((error) => {
     dialog.showErrorBox('协作中枢未能启动', error instanceof Error ? error.message : String(error));
     app.exit(1);
-  });
-  app.on('will-quit', () => {
-    // Stop intake before the port closes: no callback may be half-delivered.
-    if (unsubscribeEngine) unsubscribeEngine();
-    unsubscribeEngine = null;
-    const closingEngine = engine;
-    engine = null;
-    if (room) void room.close();
-    room = null;
-    if (closingEngine) void closingEngine.close().catch(() => undefined);
-    const closingBridge = managedBridge;
-    managedBridge = null;
-    if (closingBridge) void closingBridge.stop().catch(() => undefined);
   });
 }
