@@ -33,12 +33,11 @@ const bootstrap = {
 };
 
 describe('resolveConfig', () => {
-  it('keeps the unified system launcher when the tray toggles Windows startup',()=>{
+  it('starts the native GUI at login while retaining the unified client bootstrap',()=>{
     const config=resolveConfig({argv:['app','--system-launcher','D:/Relay/start.ps1'],env:{RELAY_CONTROL_ROOM_TOKEN:'fixture-key'}});
     const command=loginItemCommand(config,{executable:'app.exe',userDataPath:'D:/profile',windowsScriptHost:'wscript.exe',runtimeRoot:'D:/Relay',consoleDir:'D:/Console'});
-    expect(command.path).toBe('wscript.exe');
-    expect(command.args).toContain(join('D:/Relay','Start-RelayHidden.vbs'));
-    expect(command.args).toContain('-Background');
+    expect(command.path).toBe('app.exe');
+    expect(command.args).toContain('--no-window');
     expect(command.args).toContain('D:/Relay/start.ps1');
     expect(command.args).not.toContain('fixture-key');
     expect(loginItemArgs(config,'D:/profile')).toContain('--system-launcher');

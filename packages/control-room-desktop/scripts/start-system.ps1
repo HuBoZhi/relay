@@ -21,7 +21,7 @@ try{
   $running=Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -ieq $record.installedExecutable -and $_.CommandLine -notmatch '--type='}
   # Login startup stays a silent tray resident; a manual launch (the Start menu
   # shortcut) opens the window, because that is what clicking an app icon means.
-  $consoleArgs=$record.arguments
+  $consoleArgs=($record.arguments -replace '(?<!\S)--no-window(?!\S)','').Trim()
   if($Background){$consoleArgs=$consoleArgs+' --no-window'}
   $consolePid=if($running){@($running)[0].ProcessId}else{$null}
   if(!$running){

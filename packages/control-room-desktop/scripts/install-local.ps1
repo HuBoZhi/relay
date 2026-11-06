@@ -27,12 +27,12 @@ New-Item -ItemType Directory -Path $bundleTarget -Force | Out-Null
 Get-ChildItem -LiteralPath $BundleSource | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $bundleTarget -Recurse -Force}
 $profile=Join-Path $InstallDir 'data'
 $exe=Join-Path $InstallDir 'Relay系统.exe'
-$args='--no-window --port 4320 --host 127.0.0.1 --user-data-dir "'+$profile+'" --workspace-state "'+$WorkspaceState+'"'
+$args='--port 4320 --host 127.0.0.1 --user-data-dir "'+$profile+'" --workspace-state "'+$WorkspaceState+'"'
 if($SystemLauncher){$args+=' --system-launcher "'+$SystemLauncher+'"'}
 $runKey='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $previous=(Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).RelaySystem
 @{previousRun=$previous;installedExecutable=$exe;arguments=$args;workspaceStatePath=$WorkspaceState;installedAt=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json | Set-Content -Encoding utf8 -LiteralPath (Join-Path $InstallDir 'startup-install-record.json')
-$startupCommand='"'+$exe+'" '+$args
+$startupCommand='"'+$exe+'" '+$args+' --no-window'
 if($SystemLauncher){
   $runtimeRoot=Split-Path -Parent (Split-Path -Parent $WorkspaceState)
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start-system.ps1') -Destination $SystemLauncher -Force
@@ -40,7 +40,6 @@ if($SystemLauncher){
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Start-RelayHidden.vbs') -Destination $hiddenLauncher -Force
   $scriptHost=Join-Path $env:SystemRoot 'System32/wscript.exe'
   $systemArgs='//B //Nologo "'+$hiddenLauncher+'" "'+$SystemLauncher+'" -RuntimeRoot "'+$runtimeRoot+'" -ConsoleDir "'+$InstallDir+'"'
-  $startupCommand='"'+$scriptHost+'" '+$systemArgs+' -Background'
   $retired=@{}
   foreach($name in @('ZCode','WorkBuddy','Factory')){
     $command=(Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).$name
@@ -63,7 +62,6 @@ foreach($shortcutPath in $shortcutPaths){
   $shortcut=$shell.CreateShortcut($shortcutPath)
   $shortcut.TargetPath=$exe;$shortcut.Arguments=$args;$shortcut.WorkingDirectory=$InstallDir
   $shortcut.IconLocation=$iconFile;$shortcut.Description='Relay系统'
-  if($SystemLauncher){$shortcut.TargetPath=$scriptHost;$shortcut.Arguments=$systemArgs}
   $shortcut.Save()
 }
 # 改名前的快捷方式指向旧路径，重装时一并清掉，避免留下失效入口。

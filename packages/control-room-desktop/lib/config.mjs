@@ -8,7 +8,6 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
 
 const CREDENTIAL_ENV = ['RELAY_CONTROL_ROOM_TOKEN', 'RELAY_WORKSPACE_KEY', 'RELAY_API_KEY'];
 
@@ -129,11 +128,11 @@ export function loginItemArgs(config, userDataPath) {
   return args;
 }
 
-export function loginItemCommand(config, {executable,userDataPath,windowsScriptHost,runtimeRoot,consoleDir}) {
-  if(config.systemLauncher) return {path:windowsScriptHost,args:['//B','//Nologo',
-    join(dirname(config.systemLauncher),'Start-RelayHidden.vbs'),config.systemLauncher,
-    '-RuntimeRoot',runtimeRoot,'-ConsoleDir',consoleDir,'-Background']};
-  return {path:executable,args:loginItemArgs(config,userDataPath)};
+export function loginItemCommand(config, { executable, userDataPath }) {
+  // Windows login launches the GUI directly. Never attach it to a script host or
+  // console; client bootstrap is a hidden, finite child of the running app.
+  return { path: executable, args: loginItemArgs(config, userDataPath).map((arg) =>
+    /\s/.test(arg) ? `"${arg}"` : arg) };
 }
 
 /** Human-readable run mode; never echoes the credential. */

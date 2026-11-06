@@ -6,6 +6,31 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { startSystemClients } from '../lib/system-startup.mjs';
+
+test('native app bootstraps clients hidden without holding up the window',
+  { skip: process.platform !== 'win32', timeout: 15000 }, async () => {
+    assert.doesNotMatch(tmpdir(), /^C:/i);
+    const root = await mkdtemp(join(tmpdir(), 'relay-native-'));
+    try {
+      const launcher = join(root, 'start.ps1');
+      const result = join(root, 'ready.json');
+      await writeFile(launcher, `param($RuntimeRoot,$ConsoleDir,[switch]$Background)
+Start-Sleep -Milliseconds 300
+@{root=$RuntimeRoot;console=$ConsoleDir;background=[bool]$Background} | ConvertTo-Json | Set-Content -LiteralPath '${result.replaceAll("'", "''")}' -Encoding UTF8
+`);
+      startSystemClients({ systemLauncher: launcher, workspaceStateFile: join(root, 'data', 'workspace.json') },
+        { consoleDir: root, log() {} });
+      // The GUI must regain control before the bootstrap process has finished.
+      await assert.rejects(readFile(result), { code: 'ENOENT' });
+      let data;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { data = JSON.parse((await readFile(result, 'utf8')).replace(/^\uFEFF/, '')); break; }
+        catch { await delay(50); }
+      }
+      assert.deepEqual(data, { root, console: root, background: true });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
 
 test('GUI launcher runs PowerShell hidden, preserves arguments and propagates failures',
   { skip: process.platform !== 'win32', timeout: 30000 }, async () => {

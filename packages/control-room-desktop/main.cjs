@@ -286,7 +286,6 @@ function loginItemEnabled() {
 function loginItemOptions() {
   return { name: 'RelaySystem', ...loginItemCommand(config, {
     executable:process.execPath,userDataPath:app.getPath('userData'),
-    windowsScriptHost:join(process.env.SystemRoot,'System32','wscript.exe'),
     runtimeRoot:config.workspaceStateFile ? dirname(dirname(config.workspaceStateFile)) : '',
     consoleDir:dirname(process.execPath),
   }), openAsHidden:true };
@@ -661,7 +660,6 @@ async function start() {
   }
 
   console.log(`[控制中心] 已启动 ${room.url} · ${room.mode}${engine ? ' · 任务引擎已挂载' : ''}`);
-  await startBridges();
   // No native menu bar: the page renders the menu in the console's own style.
   Menu.setApplicationMenu(null);
   registerIpc();
@@ -673,6 +671,11 @@ async function start() {
   tray.on('double-click', showWindow);
   tray.on('click', showWindow);
   updateTray();
+  // Show the window first. Slow client/bootstrap calls must never leave an icon
+  // that appears unresponsive for the bridge's entire retry deadline.
+  await startBridges().catch((error) => recordFailure('派发桥接启动失败', error));
+  const { startSystemClients } = await import('./lib/system-startup.mjs');
+  if (!config.smoke) startSystemClients(config, { consoleDir: dirname(process.execPath) });
   await refreshStatus();
   if (config.smoke) {
     // The tray is the part no screenshot can prove, so the smoke run states it.

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room-desktop`: launch the native Windows app directly, keep login startup in the tray, and bootstrap integrated clients after the window appears so slow bridges do not make launch look unresponsive.
+
 - `@agent-relay/control-room-desktop`: Windows unified-launch shortcuts start without flashing a PowerShell console; login startup remains hidden in the tray.
 
 - `@agent-relay/control-room`: a result for a task asked in a group conversation is delivered into that conversation and recorded as delivered. It no longer reports 需人工处理 merely because the client's own chat has no injection channel; the task detail names the group as the callback target when the task has one.
