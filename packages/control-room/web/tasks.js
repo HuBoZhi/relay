@@ -50,8 +50,8 @@ const BUSINESS = {
 };
 const CALLBACK = {
   pending: ['待投递', 'warn'],
-  'queued-in-chat': ['已入原聊天队列', 'info'],
-  'in-chat': ['已进入原聊天', 'ok'],
+  'queued-in-chat': ['已入聊天队列', 'info'],
+  'in-chat': ['已回到聊天', 'ok'],
   'awaiting-host': ['待宿主处理', 'warn'],
   handled: ['已处理', 'ok'],
   manual: ['需人工处理', 'bad'],
@@ -431,7 +431,11 @@ function renderTask() {
         ${layersOf(task.status)}
         <dl class="stage" style="border:0;padding:0;background:transparent">
           <div><dt>主题</dt><dd>${esc(topic ? topic.name : '—')} <span class="mono muted">${esc(topic ? topic.slug : '')}</span></dd></div>
-          <div><dt>原聊天（回传目标）</dt><dd>${esc(task.origin.app)} · ${esc(task.origin.device)} · <span class="mono">${esc(task.origin.chatId)}</span></dd></div>
+          <div><dt>原聊天（回传目标）</dt><dd>${
+            task.groupId
+              ? `群聊 · 结果回到发起这次派发的会话 <span class="mono muted">${esc(task.groupId)}</span>`
+              : `${esc(task.origin.app)} · ${esc(task.origin.device)} · <span class="mono">${esc(task.origin.chatId)}</span>`
+          }</dd></div>
           <div><dt>已授权范围</dt><dd>${esc(task.authorization.scopes.join('、') || '未声明')}${task.authorization.allowChain ? ' · 允许自动继续' : ' · 不自动继续'}</dd></div>
           <div><dt>创建 / 更新</dt><dd class="mono">${esc(timeLabel(task.createdAt))} / ${esc(timeLabel(task.updatedAt))}</dd></div>
         </dl>
@@ -462,7 +466,7 @@ function renderTask() {
                 <div><dt>会话</dt><dd>${run && run.actual.sessionId ? `<span class="mono">${esc(run.actual.sessionId)}</span>` : '<span class="muted">未创建 / 未知</span>'}</dd></div>
                 <div><dt>原生轮次</dt><dd>${run && run.actual.nativeTurnId ? `<span class="mono">${esc(run.actual.nativeTurnId)}</span>` : '<span class="muted">未回报</span>'}</dd></div>
                 <div><dt>完成条件</dt><dd>${esc(stage.completion.condition)}${stage.completion.requiresEvidence ? ' · 需要证据' : ''}</dd></div>
-                <div><dt>回传聊天</dt><dd>${esc(stage.callback.app)} · <span class="mono">${esc(stage.callback.chatId)}</span></dd></div>
+                <div><dt>回传聊天</dt><dd>${task.groupId ? '群聊' : esc(stage.callback.app)} · <span class="mono">${esc(stage.callback.chatId)}</span></dd></div>
                 <div><dt>尝试次数</dt><dd>${stageRuns.length || 0}</dd></div>
               </dl>
               ${

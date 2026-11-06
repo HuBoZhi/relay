@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room`: a result for a task asked in a group conversation is delivered into that conversation and recorded as delivered. It no longer reports 需人工处理 merely because the client's own chat has no injection channel; the task detail names the group as the callback target when the task has one.
+
 - `@agent-relay/dispatch-bridge`: resolve BigModel/Zhipu account labels to ZCode's native provider id so new GLM sessions accept dispatches instead of failing with `Saved session model mismatch`.
 
 - `@agent-relay/control-room`: the group-chat page asks for a group name, a result, a cancel reason, and a callback chat id in its own dialog instead of the browser's native prompt, which a desktop window answers with `null` — 「新建群（主题）」, result reporting, task cancel, and chat rebinding no longer look ignored.

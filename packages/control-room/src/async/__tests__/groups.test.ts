@@ -231,12 +231,17 @@ describe('group chat', () => {
       summary: '桥接回报：已完成',
     });
     expect(receipt.groupMessageId).toBeTruthy();
+    // The conversation received the answer, so this is a delivery — not a
+    // "needs a human" callback, even though no client chat was injected into.
+    expect(receipt.delivery.state).toBe('in-chat');
+    expect(receipt.delivery.reason ?? null).toBeNull();
 
     const view = await engine.group(group.id);
     const results = view?.messages.filter((message) => message.kind === 'result') ?? [];
     expect(results).toHaveLength(1);
     expect(results[0]?.body).toBe('桥接回报：已完成');
     expect(results[0]?.sender.agentId).toBe('zcode');
+    expect(results[0]?.state).toBe('delivered');
     await engine.close();
   });
 

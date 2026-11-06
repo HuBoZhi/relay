@@ -1438,9 +1438,16 @@ export class AsyncEngine {
     if (callback.delivery.state === 'manual' && !force) return toCallbackReceipt(callback);
 
     const chat = stage.callback;
-    const adapter = this.registry.resolve(chat.app);
+    // A grouped task was asked in this app's group, so that conversation is the
+    // place the answer belongs: appending the result there *is* the delivery.
+    // Asking a client's native chat to accept an injection would report a
+    // message the user can already read as "需要人工处理".
+    const conversation = task.groupId ? (snapshot.groups[task.groupId] ?? null) : null;
+    const adapter = conversation ? null : this.registry.resolve(chat.app);
     let outcome: DeliverOutcome;
-    if (!adapter) {
+    if (conversation) {
+      outcome = { state: 'in-chat' };
+    } else if (!adapter) {
       outcome = {
         state: 'manual',
         reason: `未接入「${chat.app}」的回传通道；原聊天接收能力未验证，需要人工处理`,
@@ -1499,7 +1506,9 @@ export class AsyncEngine {
         summary:
           current.delivery.state === 'manual'
             ? (current.delivery.reason ?? '需要人工处理')
-            : `回传已投递：${chat.app}`,
+            : conversation
+              ? '回传已投递：群聊'
+              : `回传已投递：${chat.app}`,
         at,
       });
       currentTask.status = taskStatusFrom(
@@ -1511,8 +1520,10 @@ export class AsyncEngine {
         at
       );
       currentTask.updatedAt = at;
-      if (current.delivery.state === 'in-chat') {
-        // Only a real in-chat delivery counts as evidence for the P0 gate.
+      if (current.delivery.state === 'in-chat' && !conversation) {
+        // Only a real in-chat delivery counts as evidence for the P0 gate. A
+        // group message proves the conversation got the answer, not that the
+        // client's own chat accepts injections.
         state.clientObservations[chat.app] ??= this.registry.capability(chat.app);
         noteChatInjection(state, chat.app, chat.chatId, at);
       }
