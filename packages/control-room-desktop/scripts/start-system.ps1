@@ -29,7 +29,8 @@ try{
     $launch=@{FilePath=$record.installedExecutable;ArgumentList=$consoleArgs;PassThru=$true;
       RedirectStandardOutput=(Join-Path $ConsoleDir 'logs/unified.stdout.log');
       RedirectStandardError=(Join-Path $ConsoleDir 'logs/unified.stderr.log')}
-    if($Background){$launch.WindowStyle='Hidden'}
+    # The GUI owns visibility via --no-window. Forcing SW_HIDE on the whole
+    # process can make the first later BrowserWindow.show() stay invisible.
     $running=Start-Process @launch
     $consolePid=$running.Id
   }elseif(!$Background){

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@agent-relay/control-room-desktop`: refresh model and project catalogues when the built-in bridge becomes ready, so opening the window early does not leave empty selectors until reload.
 
-- `@agent-relay/control-room-desktop`: exit waits for owned services and pending settings writes, cancels bridge startup, and handles bridge process errors without leaving an orphan child or crashing the shell.
+- `@agent-relay/control-room-desktop`: exit waits for owned services and pending settings writes, cancels bridge and client startup, and prevents initialization from reopening a closed app.
 
 - `@agent-relay/control-room-desktop`: settings changes report disk or Windows startup failures without changing live preferences, and connector changes consistently require a restart until applied.
 

@@ -162,6 +162,7 @@ async function loadHelpers() {
 }
 
 function showWindow() {
+  recordLaunch('show-request');
   if (quitting) return;
   if (!room) { pendingShow = true; return; }
   if (!win || win.isDestroyed()) {
@@ -172,6 +173,15 @@ function showWindow() {
   if (restoreMaximized) { win.maximize(); restoreMaximized = false; }
   win.show();
   win.focus();
+  recordLaunch('shown');
+}
+
+function recordLaunch(event, detail = {}) {
+  try {
+    appendFileSync(join(app.getPath('userData'), 'launch.log'), JSON.stringify({ at: new Date().toISOString(),
+      event, pid: process.pid, room: Boolean(room), window: Boolean(win), quitting,
+      visible: win && !win.isDestroyed() ? win.isVisible() : false, ...detail }) + '\n');
+  } catch {}
 }
 
 /** Load one of the app's own pages; anything else never reaches the window. */
@@ -235,6 +245,9 @@ async function createWindow() {
   });
 
   win.once('ready-to-show', () => {
+    // Reapply after native creation: Windows may adjust the non-client frame
+    // while moving a new window onto a monitor with a different DPI.
+    win.setBounds(restored.bounds);
     if (restored.maximized && (config.showWindow || pendingShow)) { win.maximize(); restoreMaximized = false; }
     if (config.showWindow || config.smoke || pendingShow) win.show();
   });
@@ -744,12 +757,19 @@ async function start() {
 
 app.setAppUserModelId('com.agentrelay.controlroom');
 
-const locked = app.requestSingleInstanceLock();
+const locked = app.requestSingleInstanceLock({ showWindow: !process.argv.includes('--no-window') });
+recordLaunch('instance-lock', { locked, manual: !process.argv.includes('--no-window') });
 if (!locked) {
   // A second launch is a request to show the window that is already running.
   app.quit();
 } else {
-  app.on('second-instance', (_event, argv) => { if (!argv.includes('--no-window')) showWindow(); });
+  app.on('second-instance', (_event, argv, _cwd, intent) => {
+    recordLaunch('second-instance', { manual: intent?.showWindow, backgroundArg: argv.includes('--no-window') });
+    if (intent?.showWindow ?? !argv.includes('--no-window')) {
+      pendingShow = true;
+      showWindow();
+    }
+  });
   app.on('before-quit', (event) => {
     if (shutdownComplete) return;
     event.preventDefault();
