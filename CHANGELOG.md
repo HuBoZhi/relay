@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/dispatch-bridge`: ZCode MCP connections can populate project selectors through `zcode_projects`, preserving desktop project IDs and paths and reporting outdated MCP services explicitly.
+
 - `@agent-relay/control-room`: group chats can be deleted with confirmation; deleted groups stay removed after restart and late callbacks, while task records and running work are preserved.
 
 - `@agent-relay/control-room-desktop`: refresh model and project catalogues when the built-in bridge becomes ready, so opening the window early does not leave empty selectors until reload.

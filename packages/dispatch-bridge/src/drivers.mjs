@@ -121,7 +121,7 @@ export function driverFor(drivers, client) {
  * enumerate their projects say so rather than returning a made-up list.
  */
 export async function listProjectsFor({ drivers, client, timeoutMs = 20_000 }) {
-  if (client === 'zcode' && drivers.zcodeMcp) throw new Error('zcode-mcp 未提供项目枚举工具，请直接填写项目目录');
+  if (client === 'zcode' && drivers.zcodeMcp) return drivers.zcodeMcp.listProjects();
   if (!SUPPORTED_CLIENTS.includes(client)) throw new Error(`不支持的客户端：${client}`);
   if (!drivers.available) throw new Error(drivers.reason);
   const Driver = driverFor(drivers, client);

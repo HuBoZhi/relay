@@ -55,6 +55,23 @@ export class ZCodeMcpConnection {
       .map((id) => ({ id, label: id, reasoning: ['low', 'high', 'max'] }));
     return this.models;
   }
+  async listProjects() {
+    await this.connect();
+    if (!this.tools.has('zcode_projects')) throw new Error('当前 zcode-mcp 未提供 zcode_projects，请更新 MCP 服务后重新读取项目');
+    const result = await this.tool('zcode_projects');
+    if (result.isError) throw new Error(textOf(result) || 'ZCode 项目查询失败');
+    let body = result.structuredContent;
+    if (!body) {
+      try { body = JSON.parse(textOf(result)); }
+      catch { throw new Error('zcode_projects 返回了无效的项目数据'); }
+    }
+    if (!Array.isArray(body?.projects) || body.projects.some((project) =>
+      !project || typeof project.id !== 'string' || !project.id.trim() ||
+      typeof project.name !== 'string' || typeof project.path !== 'string' || !project.path.trim())) {
+      throw new Error('zcode_projects 返回了无效的项目数据');
+    }
+    return body.projects.map(({ id, name, path }) => ({ id, name: name || path, path }));
+  }
   async close() {
     await this.client?.close();
     this.ready = null;

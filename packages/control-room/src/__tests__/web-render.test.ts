@@ -75,7 +75,7 @@ async function render(baseUrl: string, options: RenderOptions = {}): Promise<Ren
     } as never;
   }
 
-  for (const file of ['icons.js', 'api.js', 'app.js']) {
+  for (const file of ['icons.js', 'api.js', 'desktop-menu.js', 'workspace-shell.js', 'app.js']) {
     window.eval(readFileSync(resolve(WEB_ROOT, file), 'utf8'));
   }
 
@@ -446,17 +446,18 @@ describe('control room renderer', () => {
     await new Promise((settle) => setTimeout(settle, 300));
 
     expect(view.window.document.documentElement.classList.contains('is-desktop')).toBe(true);
-    expect(view.window.document.querySelector('#app-menu')?.hasAttribute('hidden')).toBe(false);
-    expect(view.count('[data-menu-trigger]')).toBe(2);
-    expect(view.text('[data-menu-trigger="0"]')).toBe('控制中心');
+    expect(view.window.document.querySelector('#menu-button')?.hasAttribute('hidden')).toBe(false);
+    expect(view.count('.workspace-nav [aria-current="page"]')).toBe(1);
 
     // Opening a group, then choosing an entry, runs the shell action.
-    view.click('[data-menu-trigger="0"]');
-    expect(view.window.document.querySelector('[data-menu-panel="0"]')?.hasAttribute('hidden')).toBe(false);
-    view.click('[data-menu-action="copy-url"]');
+    view.click('#menu-button');
+    await new Promise((settle) => setTimeout(settle, 50));
+    expect(view.window.document.querySelector('#menu-pop')?.hasAttribute('hidden')).toBe(false);
+    expect(view.count('#menu-pop .group')).toBe(2);
+    view.click('#menu-pop button');
     await new Promise((settle) => setTimeout(settle, 50));
     expect(calls).toEqual(['copy-url']);
-    expect(view.window.document.querySelector('[data-menu-panel="0"]')?.hasAttribute('hidden')).toBe(true);
+    expect(view.window.document.querySelector('#menu-pop')?.hasAttribute('hidden')).toBe(true);
   }, 20_000);
 
   it('hides the shell menu bar in a plain browser', async () => {
@@ -465,6 +466,7 @@ describe('control room renderer', () => {
     view = await render(server.url);
     expect(view.window.document.documentElement.classList.contains('is-desktop')).toBe(false);
     expect(view.window.document.querySelector('#app-menu')?.hasAttribute('hidden')).toBe(true);
+    expect(view.window.document.querySelector('#menu-button')?.hasAttribute('hidden')).toBe(true);
   }, 20_000);
 
   it('does not present an unreachable workspace as healthy', async () => {

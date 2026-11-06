@@ -464,11 +464,11 @@ function renderComposer() {
                 )
                 .join('')}
             </select>`
-            : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:////Work////MediaDock" />`
+            : `<input id="path-input" value="${esc(draft.path)}" placeholder="D:/Work/MediaDock" />`
         }
         ${
           projects.list.length === 0 && projects.reason
-            ? `<span class="hint" title="${esc(projects.reason)}">暂时无法读取 ${esc(agentLabel(draft.participants[0]?.target))} 的项目。请在「客户端接入」检查连接，或直接填写目录。</span>
+            ? `<span class="hint">${esc(agentLabel(draft.participants[0]?.target))} 项目读取未完成：${esc(projects.reason)}。可重新读取，或直接填写目录。</span>
               <button type="button" class="link-button" id="retry-projects">重新读取项目</button>`
             : ''
         }
