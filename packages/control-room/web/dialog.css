@@ -14,7 +14,7 @@
 }
 
 .relay-ask {
-  width: min(430px, 100%);
+  width: min(480px, 100%);
   max-height: min(80dvh, 560px);
   overflow: auto;
   padding: 22px 24px 18px;
@@ -33,7 +33,7 @@
 
 .relay-ask-head p {
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--muted);
 }
@@ -52,7 +52,7 @@
 }
 
 .relay-ask-field > span {
-  font-size: 10.5px;
+  font-size: 13px;
   letter-spacing: 0.05em;
   color: #7b8b96;
 }
@@ -67,7 +67,7 @@
   border-radius: 8px;
   background: #0d141a;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 14px;
   outline-offset: 2px;
 }
 
@@ -96,19 +96,21 @@
 .relay-ask-field .relay-ask-hint {
   display: block;
   margin: 0;
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0;
   color: #6d7f8c;
 }
 
 .relay-ask-error {
   margin-top: 12px;
-  font-size: 10.5px;
+  font-size: 13px;
   color: #e0796d;
 }
 
 .relay-ask-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
   margin-top: 20px;
@@ -117,8 +119,9 @@
 }
 
 .relay-ask-keys {
+  flex: 1 1 140px;
   margin-right: auto;
-  font: 9px var(--mono);
+  font: 13px var(--mono);
   color: #65828e;
 }
 
@@ -128,7 +131,7 @@
   border-radius: 8px;
   background: #16222b;
   color: #cddde5;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .relay-ask-button:hover {
