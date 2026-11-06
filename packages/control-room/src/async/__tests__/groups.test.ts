@@ -91,6 +91,20 @@ function workMention(overrides: Partial<GroupMention> = {}): GroupMention {
 }
 
 describe('group chat', () => {
+  it('preserves a ZCode permission choice in mentions, dispatches and stored sessions', async () => {
+    const adapter = new FakeZcode();
+    const engine = new AsyncEngine({ dataRoot: await scratchRoot(), adapters: [adapter] });
+    try {
+      const { group } = await engine.createGroup({ name: '权限测试', creator: codex });
+      const posted = await engine.postGroupMessage(group.id, { sender: codex, body: '分析项目',
+        mentions: [workMention({ session: { policy: 'new', sessionId: null, permissionMode: 'plan' } })] });
+      expect(posted.message.mentions[0]?.session?.permissionMode).toBe('plan');
+      expect(adapter.dispatches[0]?.session.permissionMode).toBe('plan');
+      expect((await engine.snapshot()).stages[0]?.session.permissionMode).toBe('plan');
+      await expect(engine.postGroupMessage(group.id, { sender: codex, body: 'invalid',
+        mentions: [workMention({ session: { policy: 'new', sessionId: null, permissionMode: 'invalid' as never } })] })).rejects.toBeInstanceOf(AsyncValidationError);
+    } finally { await engine.close(); }
+  });
   it('deletes a group durably without deleting its tasks or resurrecting it on callback', async () => {
     const dataRoot = await scratchRoot();
     const engine = new AsyncEngine({ dataRoot, adapters: [new FakeZcode()] });

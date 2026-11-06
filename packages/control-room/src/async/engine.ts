@@ -339,10 +339,12 @@ export class AsyncEngine {
             id: knownProjectId ?? spec.project.id ?? '',
             path: spec.project.path,
           },
-          session:
+          session: { ...(
             session.policy === 'continue'
               ? { policy: 'continue', sessionId: session.sessionId ?? null }
-              : { policy: 'new', sessionId: null },
+              : { policy: 'new', sessionId: null }),
+            ...(session.permissionMode ? { permissionMode: session.permissionMode } : {}),
+          },
           model,
           completion: {
             condition: spec.completion.condition,
@@ -585,7 +587,7 @@ export class AsyncEngine {
         // The adapter reported a session; remember it so a later stage that asks
         // to continue has something real to continue.
         if (outcome.sessionId)
-          currentStage.session = { policy: currentStage.session.policy, sessionId: outcome.sessionId };
+          currentStage.session = { ...currentStage.session, sessionId: outcome.sessionId };
         currentStage.status = cloneStatus(currentRun.status);
         currentStage.status.business = currentStage.status.business;
         currentStage.updatedAt = at;
@@ -1902,6 +1904,10 @@ function validateStage(stage: SubmitStageInput, index: number, issues: Validatio
   }
   if (stage.session?.policy === 'continue' && !stage.session.sessionId?.trim()) {
     issues.push({ field: `${at}.session.sessionId`, message: '接续会话必须指定会话 ID' });
+  }
+  if (stage.session?.permissionMode !== undefined &&
+      (stage.client !== 'zcode' || !['plan', 'build', 'edit', 'guarded', 'yolo'].includes(stage.session.permissionMode))) {
+    issues.push({ field: `${at}.session.permissionMode`, message: '访问权限仅支持 ZCode 的计划、变更前确认、自动编辑、自主或完全访问模式' });
   }
 }
 

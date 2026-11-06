@@ -105,6 +105,8 @@ export interface ModelOption {
 }
 
 export interface SessionPolicy {
+  /** Optional per-request ZCode MCP permission choice; omitted keeps the connection default. */
+  permissionMode?: 'plan' | 'build' | 'edit' | 'guarded' | 'yolo';
   /** `new` creates a desktop-visible session; `continue` reuses `sessionId`. */
   policy: 'new' | 'continue';
   sessionId: string | null;

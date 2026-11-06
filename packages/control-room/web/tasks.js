@@ -745,6 +745,7 @@ function emptyStage(index, client = 'zcode') {
     projectId: '',
     sessionPolicy: 'new',
     sessionId: '',
+    permissionMode: '',
     account: 'BigModel',
     provider: 'zhipu',
     modelId: 'GLM-5.3-Flash',
@@ -902,6 +903,14 @@ function stageFields(stage, index) {
         <input name="stageSessionId" data-index="${index}" value="${esc(stage.sessionId)}" placeholder="仅接续时填写" />
         ${fieldError(`${base}.session.sessionId`)}
       </div>
+      <div class="field"${invalid(`${base}.session.permissionMode`)}>
+        <label>ZCode 访问权限</label>
+        <select name="stagePermission" data-index="${index}"${stage.client !== 'zcode' ? ' disabled' : ''}>
+          ${window.RELAY_PERMISSION_MODES.map(([value, label]) => `<option value="${value}"${value === (stage.permissionMode || '') ? ' selected' : ''}>${label}</option>`).join('')}
+        </select>
+        <small>仅 ZCode MCP；下一次派活时应用。需人工确认的操作在无头 MCP 中会被拒绝。</small>
+        ${fieldError(`${base}.session.permissionMode`)}
+      </div>
       <div class="field"${invalid(`${base}.model.account`)}>
         <label>账户 / 提供商</label>
         <input name="stageAccount" data-index="${index}" value="${esc(stage.account)}" />
@@ -981,6 +990,7 @@ function readForm(form) {
     stage.projectId = value('stageProjectId');
     stage.sessionPolicy = value('stageSession') === 'continue' ? 'continue' : 'new';
     stage.sessionId = value('stageSessionId');
+    stage.permissionMode = stage.client === 'zcode' ? value('stagePermission') : '';
     stage.account = value('stageAccount');
     stage.modelId = value('stageModel');
     stage.reasoning = value('stageReasoning');
@@ -1011,10 +1021,11 @@ function payloadFromDraft(draft) {
       kind: stage.kind,
       client: stage.client,
       project: { id: stage.projectId, path: stage.projectPath },
-      session:
+      session: { ...(
         stage.sessionPolicy === 'continue'
           ? { policy: 'continue', sessionId: stage.sessionId }
-          : { policy: 'new', sessionId: null },
+          : { policy: 'new', sessionId: null }),
+        ...(stage.client === 'zcode' && stage.permissionMode ? { permissionMode: stage.permissionMode } : {}) },
       model: {
         account: stage.account,
         provider: stage.account,

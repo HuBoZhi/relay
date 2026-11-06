@@ -344,6 +344,7 @@ function renderMessage(message) {
       ${targetTags}
       <span class="tag">${esc(model)}</span>
       <span class="tag project" title="${esc(project)}">${esc(project)}</span>
+      ${mention?.session?.permissionMode ? `<span class="tag">请求权限：${esc(window.relayPermissionLabel(mention.session.permissionMode))}</span>` : ''}
       ${badge(SEND_STATE, message.state)}
     </div>`;
   }
@@ -428,6 +429,9 @@ function renderComposer() {
             )
             .join('')}
         </select>
+        ${participant.target === 'zcode' ? `<select data-role="permission" aria-label="ZCode 访问权限" title="本次派活的访问权限，下一次派活前可修改">
+          ${window.RELAY_PERMISSION_MODES.map(([value, label]) => `<option value="${value}"${value === (participant.permissionMode || '') ? ' selected' : ''}>${label}</option>`).join('')}
+        </select>` : ''}
         ${
           draft.participants.length > 1
             ? `<button type="button" class="link-button" data-role="remove">移除</button>`
@@ -448,6 +452,7 @@ function renderComposer() {
         <button class="link-button" type="button" id="add-participant">+ 新增 Agent</button>
       </div>
       <div class="participants" id="participants">${rows}</div>
+      ${draft.participants.some(p => p.target === 'zcode') ? '<span class="hint permission-note">权限控制 ZCode 的操作确认策略。MCP 暂不支持人工审批；需确认的操作会被拒绝。完全访问会减少确认，仅对本次派活生效。</span>' : ''}
       ${issue('mentions[0].model')}
     </div>
     <div class="composer-row">
@@ -558,6 +563,7 @@ function readDraft() {
     target: row.querySelector('[data-role="target"]').value,
     model: row.querySelector('[data-role="model"]').value,
     reasoning: row.querySelector('[data-role="reasoning"]').value,
+    permissionMode: row.querySelector('[data-role="permission"]')?.value || '',
   }));
   const projectSelect = $('#path-select');
   const pathInput = $('#path-input');
@@ -591,6 +597,8 @@ function mentionsFor(work) {
       return {
         target: participant.target,
         client: participant.target,
+        ...(participant.target === 'zcode' && participant.permissionMode
+          ? { session: { policy: 'new', sessionId: null, permissionMode: participant.permissionMode } } : {}),
         ...(model
           ? {
               model: {

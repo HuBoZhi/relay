@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@agent-relay/control-room`: choose ZCode MCP access permissions per group-chat request or task stage, including continued sessions; requests retain the selected policy and older MCP servers report when verified switching is unavailable.
+
 - `@agent-relay/control-room`: the group-chat identity picker offers Relay itself, and new users default to speaking as Relay instead of impersonating Codex; agents remain the only @-mention targets.
 
 ### Fixed

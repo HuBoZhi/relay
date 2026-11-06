@@ -918,3 +918,10 @@ body {
   flex: 0 1 420px;
   max-width: 460px;
 }
+
+.participant { display: flex; flex-wrap: wrap; }
+.participant > [data-role='target'] { width: 132px; }
+.participant > [data-role='model'] { width: 210px; }
+.participant > [data-role='reasoning'] { width: 92px; }
+.participant > [data-role='permission'] { width: 174px; }
+.permission-note { max-width: 760px; line-height: 1.5; }

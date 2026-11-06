@@ -11,7 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AsyncEngine,
@@ -99,9 +99,12 @@ describe('group → bridge → client → group', () => {
       engine.registerAdapter(new HttpBridgeAdapter({ client: 'zcode', baseUrl: url }));
       const sender = { agentId: 'relay', displayName: 'Relay', app: 'relay', device: 'local', chatId: 'chat_relay_main' };
       const { group } = await engine.createGroup({ name: 'MCP 连接验收', creator: sender });
+      const spy = vi.spyOn(drivers.zcodeMcp, 'tool');
       const request = await engine.postGroupMessage(group.id, { sender, body: '验证 MCP 异步回传', mentions: [{ target: 'zcode', client: 'zcode',
+        session: { policy: 'new', sessionId: null, permissionMode: 'guarded' },
         project: { id: '', path: 'D:/McpTest' }, model: { account: 'BigModel', modelId: 'GLM-5.3', reasoning: 'high' } }] });
       expect(request.receipt?.phase).toBe('accepted');
+      expect(spy).toHaveBeenCalledWith('zcode_run', expect.objectContaining({ mode: 'guarded' }), expect.any(Number));
       expect(request.receipt?.sessionId).toBeNull();
       expect(request.message.state).toBe('accepted');
       expect(await waitFor(async () => Boolean((await engine.group(group.id))?.messages.some((m) => m.kind === 'result')))).toBe(true);

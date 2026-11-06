@@ -189,6 +189,7 @@ describe('chat page', () => {
     window.eval(readFileSync(resolve(web, 'icons.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'dialog.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'desktop-menu.js'), 'utf8'));
+    window.eval(readFileSync(resolve(web, 'permissions.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'chat.js'), 'utf8'));
     await settle();
     await settle();
@@ -234,6 +235,21 @@ describe('chat page', () => {
       return { status: 404, body: { error: '未知接口' } };
     };
   }
+
+  it('sends the chosen ZCode permission and saves it with the group draft', async () => {
+    const ui = await setup(route());
+    for (let i = 0; i < 40 && !ui.element('#path-select'); i += 1) await settle();
+    const permission = ui.element('[data-role="permission"]') as HTMLSelectElement;
+    permission.value = 'guarded';
+    permission.dispatchEvent(new ui.window.Event('change', { bubbles: true }));
+    expect(JSON.parse(ui.window.localStorage.getItem('relay.chat.draft.grp_1') || '{}').participants[0].permissionMode).toBe('guarded');
+    (ui.element('#body-input') as HTMLTextAreaElement).value = '按所选权限执行';
+    (ui.element('#path-select') as HTMLSelectElement).value = 'D:////Work////MediaDock';
+    ui.element('#dispatch-button')?.click();
+    await settle(); await settle();
+    const posted = ui.calls.find(call => call.init?.method === 'POST');
+    expect(JSON.parse(String(posted?.init?.body)).mentions[0].session.permissionMode).toBe('guarded');
+  });
 
   it('keeps the message draft and caret when a background refresh replaces the conversation', async () => {
     const ui = await setup(route());

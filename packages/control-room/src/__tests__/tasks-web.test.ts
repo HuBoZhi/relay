@@ -118,6 +118,7 @@ describe('task workspace rendering', () => {
     });
     window.eval(readFileSync(resolve(web, 'icons.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'desktop-menu.js'), 'utf8'));
+    window.eval(readFileSync(resolve(web, 'permissions.js'), 'utf8'));
     window.eval(readFileSync(resolve(web, 'tasks.js'), 'utf8'));
     await settle();
     await settle();
@@ -191,6 +192,7 @@ describe('task workspace rendering', () => {
     ui.click('[data-nav="dispatch"]');
     await settle();
     const window = ui.window;
+    (window.document.querySelector('[name="stagePermission"]') as HTMLSelectElement).value = 'plan';
     (window.document.querySelector('#f-title') as HTMLInputElement).value = '实现内容主题替换';
     (window.document.querySelector('#f-origin-chat') as HTMLInputElement).value = 'chat_original_7';
     (window.document.querySelector('[name="stagePath"]') as HTMLInputElement).value = 'D:\\Work\\MediaDock';
@@ -210,6 +212,7 @@ describe('task workspace rendering', () => {
     expect(payload.origin.chatId).toBe('chat_original_7');
     expect(payload.stages[0]?.model.modelId).toBe('GLM-5.3-Flash');
     expect(payload.stages[0]?.model.reasoning).toBe('max');
+    expect(payload.stages[0]).toMatchObject({ session: { permissionMode: 'plan' } });
 
     // The static form hint mentions both words; only the receipt heading may
     // state a phase, and for a queued dispatch it must say queued.

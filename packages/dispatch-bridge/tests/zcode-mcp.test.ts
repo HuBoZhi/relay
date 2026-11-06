@@ -1,9 +1,29 @@
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ZCodeMcpConnection, ZCodeMcpDesktop } from '../src/zcode-mcp.mjs';
 import { listProjectsFor } from '../src/drivers.mjs';
 
 describe('ZCode through MCP', () => {
+  it('refuses explicit permission overrides on an older MCP before sending work', async () => {
+    const connection = new ZCodeMcpConnection({ command: process.execPath,
+      args: [fileURLToPath(new URL('./fixtures/zcode-mcp.mjs', import.meta.url))], cwd: process.env.TEMP, env: { PROJECT_MODE: 'legacy' } });
+    try {
+      const desktop = new ZCodeMcpDesktop(connection, null, { workspace: 'D:/project', permissionMode: 'yolo' });
+      await expect(desktop.submit(null, 'test', 'not-sent')).rejects.toThrow('请更新 MCP 服务');
+      expect(connection.jobs.size).toBe(0);
+    } finally { await connection.close(); }
+  });
+  it.each(['plan', 'build', 'edit', 'guarded', 'yolo'])('passes the per-request %s permission instead of the connection default', async (mode) => {
+    const connection = new ZCodeMcpConnection({ command: process.execPath,
+      args: [fileURLToPath(new URL('./fixtures/zcode-mcp.mjs', import.meta.url))], cwd: process.env.TEMP, mode: 'build' });
+    const spy = vi.spyOn(connection, 'tool');
+    try {
+      const desktop = new ZCodeMcpDesktop(connection, 'sess_resume', { workspace: 'D:/project', permissionMode: mode });
+      await desktop.submit('sess_resume', 'test', `permission-${mode}`);
+      expect(spy).toHaveBeenCalledWith('zcode_run', expect.objectContaining({ mode, session_id: 'sess_resume' }), expect.any(Number));
+      await new Promise(done => setTimeout(done, 200));
+    } finally { await connection.close(); }
+  });
   it.each(['structured', 'text', 'empty'])('reads %s project responses through the shared MCP connection', async (mode) => {
     const connection = new ZCodeMcpConnection({ command: process.execPath,
       args: [fileURLToPath(new URL('./fixtures/zcode-mcp.mjs', import.meta.url))], cwd: process.env.TEMP,

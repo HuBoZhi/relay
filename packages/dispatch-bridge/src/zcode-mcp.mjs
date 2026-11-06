@@ -83,15 +83,20 @@ export class ZCodeMcpConnection {
 export class ZCodeMcpDesktop {
   constructor(connection, sessionId, options = {}) {
     this.connection = connection; this.sessionId = sessionId; this.workspace = options.workspace; this.model = options.model;
+    this.permissionMode = options.permissionMode;
     this.acceptanceStatus = 'accepted';
   }
   async createSession() { return { sessionId: null }; }
   async submit(sessionId, prompt, requestId) {
     if (this.connection.jobs.has(requestId)) return;
+    if (this.permissionMode) {
+      await this.connection.connect();
+      if (!this.connection.tools.has('zcode_set_mode')) throw new Error('当前 zcode-mcp 不支持已验证的权限切换，请更新 MCP 服务');
+    }
     const timeout = this.connection.config.timeoutMs || 600000;
     const job = { status: 'running', sessionId: sessionId || null, response: '' };
     this.connection.jobs.set(requestId, job);
-    const args = { prompt, cwd: this.workspace, mode: this.connection.config.mode || 'build', timeout_ms: timeout,
+    const args = { prompt, cwd: this.workspace, mode: this.permissionMode || this.connection.config.mode || 'build', timeout_ms: timeout,
       ...(sessionId ? { session_id: sessionId } : {}),
       ...(this.model?.modelId ? { model: this.model.providerId ? `${this.model.providerId}/${this.model.modelId}` : this.model.modelId } : {}),
       ...(this.model?.options?.reasoningLevel ? { reasoning_level: this.model.options.reasoningLevel } : {}),

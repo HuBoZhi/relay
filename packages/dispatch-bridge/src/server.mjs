@@ -103,7 +103,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     log,
   });
 
-  async function ensureDesktop({ client, workspace, model, continueSessionId }) {
+  async function ensureDesktop({ client, workspace, model, continueSessionId, permissionMode }) {
     if (!drivers.available) throw new HttpError(503, drivers.reason);
     const Driver = driverFor(drivers, client);
     if (!Driver) throw new HttpError(400, `不支持的客户端：${client}`);
@@ -122,6 +122,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     const transport = existing?.transport ?? (await drivers.connect({ client, port: PORTS[client] }));
     const desktop = new Driver(transport, continueSessionId, {
       workspace,
+      permissionMode,
       model: client === 'zcode' && drivers.zcodeMcp ? {
         modelId: model?.modelId,
         ...(model?.provider?.startsWith('account:') ? { providerId: model.provider } : {}),
@@ -137,6 +138,10 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     const client = String(request.client || '');
     if (!SUPPORTED_CLIENTS.includes(client)) throw new HttpError(400, `不支持的客户端：${client}`);
     if (!request.project?.path) throw new HttpError(400, '派发必须指定项目目录');
+    if (request.session?.permissionMode !== undefined &&
+        (client !== 'zcode' || !drivers.zcodeMcp || !['plan', 'build', 'edit', 'guarded', 'yolo'].includes(request.session.permissionMode))) {
+      throw new HttpError(400, '当前连接不支持指定 ZCode MCP 访问权限');
+    }
     if (!request.taskId || !request.stageId || !request.runId) {
       throw new HttpError(400, '派发必须携带 taskId / stageId / runId');
     }
@@ -154,7 +159,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
 
     let entry;
     try {
-      entry = await ensureDesktop({ client, workspace, model: request.model, continueSessionId });
+      entry = await ensureDesktop({ client, workspace, model: request.model, continueSessionId, permissionMode: request.session?.permissionMode });
     } catch (error) {
       return { status: 'failed', reason: error.message };
     }

@@ -7,7 +7,7 @@ input.on('line', (line) => {
   if (message.method === 'initialize') return send(message.id, {
     protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'zcode-mcp-fixture', version: '1' },
   });
-  if (message.method === 'tools/list') return send(message.id, { tools: ['zcode_run', 'zcode_check', 'zcode_sessions', ...(process.env.PROJECT_MODE === 'legacy' ? [] : ['zcode_projects'])].map((name) => ({ name, inputSchema: { type: 'object' } })) });
+  if (message.method === 'tools/list') return send(message.id, { tools: ['zcode_run', 'zcode_check', 'zcode_sessions', ...(process.env.PROJECT_MODE === 'legacy' ? [] : ['zcode_projects', 'zcode_set_mode'])].map((name) => ({ name, inputSchema: { type: 'object' } })) });
   const { name, arguments: args } = message.params;
   if (name === 'zcode_projects') {
     const mode = process.env.PROJECT_MODE;
