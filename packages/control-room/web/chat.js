@@ -158,6 +158,9 @@ function loadMe() {
   state.me =
     stored && stored.agentId ? stored : { agentId: 'relay', chatId: 'chat_relay_main', device: 'desktop-01' };
   if (!state.me.chatId) state.me.chatId = `chat_${state.me.agentId}_main`;
+  if (/^chat_(relay|codex|zcode|workbuddy|factory)_main$/.test(state.me.chatId)) {
+    state.me.chatId = `chat_${state.me.agentId}_main`;
+  }
   if (!state.me.device) state.me.device = 'desktop-01';
 }
 
@@ -1012,6 +1015,11 @@ $('#new-group-button').onclick = () => void createGroup();
 $('#refresh-button').onclick = () => void refresh();
 
 void (async () => {
+  window.relayDesktop?.onConnectionsReady?.(() => {
+    state.projects = { client: null, list: [], reason: null, loading: false };
+    state.models = {};
+    renderConversation();
+  });
   loadMe();
   renderMe();
   paintIcons();

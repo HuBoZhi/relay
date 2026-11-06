@@ -151,7 +151,7 @@ describe('chat page', () => {
     dom = null;
   });
 
-  async function setup(handler: (call: Call) => unknown) {
+  async function setup(handler: (call: Call) => unknown, configure: (window: any) => void = () => {}) {
     const calls: Call[] = [];
     dom = new JSDOM(readFileSync(resolve(web, 'chat.html'), 'utf8'), {
       url: 'http://localhost/chat.html',
@@ -159,6 +159,7 @@ describe('chat page', () => {
       pretendToBeVisual: true,
     });
     const { window } = dom;
+    configure(window);
     (window as unknown as { EventSource: unknown }).EventSource = class {
       addEventListener() {}
       close() {}
@@ -256,6 +257,18 @@ describe('chat page', () => {
     input.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, isComposing: true, bubbles: true }));
     await settle();
     expect(ui.calls.some((call) => call.init?.method === 'POST')).toBe(false);
+  });
+
+  it('refreshes client catalogues when the native bridge finishes starting', async () => {
+    let ready!: () => void;
+    const ui = await setup(route(), (window) => {
+      window.relayDesktop = { onConnectionsReady: (listener) => { ready = listener; } };
+    });
+    const before = ui.calls.filter((call) => call.url.startsWith('/api/async/projects')).length;
+    expect(typeof ready).toBe('function');
+    ready();
+    await settle(); await settle();
+    expect(ui.calls.filter((call) => call.url.startsWith('/api/async/projects')).length).toBeGreaterThan(before);
   });
 
   it('persists a per-group draft and refuses duplicate sends while a request is pending', async () => {

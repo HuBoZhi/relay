@@ -18,4 +18,9 @@ contextBridge.exposeInMainWorld('relayDesktop', {
   settings: () => ipcRenderer.invoke('desktop:settings:get'),
   patchSettings: (patch) => ipcRenderer.invoke('desktop:settings:patch', patch),
   chooseDataDirectory: () => ipcRenderer.invoke('desktop:settings:choose-directory'),
+  onConnectionsReady: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('desktop:connections-ready', listener);
+    return () => ipcRenderer.removeListener('desktop:connections-ready', listener);
+  },
 });

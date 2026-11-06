@@ -715,6 +715,7 @@ async function start() {
   // that appears unresponsive for the bridge's entire retry deadline.
   await startBridges().catch((error) => recordFailure('派发桥接启动失败', error));
   if (quitting) return;
+  if (win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');
   const { startSystemClients } = await import('./lib/system-startup.mjs');
   if (!config.smoke) startSystemClients(config, { consoleDir: dirname(process.execPath) });
   await refreshStatus();
