@@ -250,11 +250,17 @@ async function openGroup(groupId) {
 }
 
 async function refresh() {
-  if (state.loading) return;
+  if (state.loading) {
+    state.refreshPending = true;
+    return;
+  }
   state.loading = true;
   try {
-    await loadGroups();
-    if (state.activeId) await openGroup(state.activeId);
+    do {
+      state.refreshPending = false;
+      await loadGroups();
+      if (state.activeId) await openGroup(state.activeId);
+    } while (state.refreshPending);
   } finally {
     state.loading = false;
   }
@@ -1029,8 +1035,15 @@ function connectStream() {
   } catch {
     return;
   }
-  // Group events ride the same pipe as the observer frames; a refresh here is
-  // event-driven, never a timer.
+  // SSE has no replay: reconcile after opening or reconnecting to catch any
+  // updates between the initial load and subscription, or during an outage.
+  const scheduleRefresh = () => {
+    clearTimeout(connectStream.timer);
+    connectStream.timer = setTimeout(() => void refresh(), 200);
+  };
+  stream.addEventListener('open', scheduleRefresh);
+  // Bridge callbacks and task state changes also update group messages. They
+  // arrive as callback/stage/task events rather than group.* events.
   stream.addEventListener('async', (event) => {
     let payload = null;
     try {
@@ -1039,9 +1052,8 @@ function connectStream() {
       payload = null;
     }
     const type = payload && payload.event ? payload.event.type : '';
-    if (!String(type).startsWith('group.')) return;
-    clearTimeout(connectStream.timer);
-    connectStream.timer = setTimeout(() => void refresh(), 200);
+    if (!/^(group|callback|stage|task)\./.test(String(type))) return;
+    scheduleRefresh();
   });
 }
 

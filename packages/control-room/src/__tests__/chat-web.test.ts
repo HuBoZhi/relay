@@ -160,8 +160,9 @@ describe('chat page', () => {
     });
     const { window } = dom;
     configure(window);
+    const stream = new window.EventTarget();
     (window as unknown as { EventSource: unknown }).EventSource = class {
-      addEventListener() {}
+      addEventListener(type: string, listener: EventListener) { stream.addEventListener(type, listener); }
       close() {}
     };
     (window as unknown as { fetch: unknown }).fetch = vi.fn(async (url: string, init?: RequestInit) => {
@@ -195,7 +196,7 @@ describe('chat page', () => {
     await settle();
     await settle();
     const element = (selector: string) => window.document.querySelector(selector) as HTMLElement | null;
-    return { window, calls, element, text: () => window.document.body.textContent || '' };
+    return { window, calls, element, stream, text: () => window.document.body.textContent || '' };
   }
 
   function route(view = fixture()) {
@@ -235,6 +236,64 @@ describe('chat page', () => {
       return { status: 404, body: { error: '未知接口' } };
     };
   }
+
+  it('shows bridge callback results without leaving the group', async () => {
+    const view = fixture();
+    const result = view.messages.pop()!;
+    const handler = route(view);
+    let completed = false;
+    const ui = await setup(call => {
+      const response = handler(call);
+      if (call.url === '/api/groups' && completed) response.groups![0].openRequests = 0;
+      return response;
+    });
+    expect(ui.element('#messages')?.textContent).not.toContain(result.body);
+    view.messages.push(result);
+    completed = true;
+    ui.stream.dispatchEvent(new ui.window.MessageEvent('async', {
+      data: JSON.stringify({ event: { type: 'callback.delivered', taskId: 'task_1' } }),
+    }));
+    await vi.waitFor(() => expect(ui.element('#messages')?.textContent).toContain(result.body));
+    expect(ui.element('#engine-chip-text')?.textContent).not.toContain('请求在途');
+  });
+
+  it('reconciles results missed before a stream opens or reconnects', async () => {
+    const view = fixture();
+    const result = view.messages.pop()!;
+    const ui = await setup(route(view));
+    view.messages.push(result);
+    ui.stream.dispatchEvent(new ui.window.Event('open'));
+    await vi.waitFor(() => expect(ui.element('#messages')?.textContent).toContain(result.body));
+    view.messages[view.messages.length - 1].body = '断线期间完成的第二次回传';
+    ui.stream.dispatchEvent(new ui.window.Event('open'));
+    await vi.waitFor(() => expect(ui.element('#messages')?.textContent).toContain('断线期间完成的第二次回传'));
+  });
+
+  it('refreshes again when a callback arrives while an older refresh is in flight', async () => {
+    const view = fixture();
+    const result = view.messages.pop()!;
+    const handler = route(view);
+    let release: (() => void) | undefined;
+    let hold = false;
+    const ui = await setup(async call => {
+      const response = structuredClone(handler(call));
+      if (hold && call.url === '/api/groups/grp_1') {
+        hold = false;
+        await new Promise<void>(resolve => { release = resolve; });
+      }
+      return response;
+    });
+    hold = true;
+    ui.element('#refresh-button')!.click();
+    await vi.waitFor(() => expect(release).toBeDefined());
+    view.messages.push(result);
+    ui.stream.dispatchEvent(new ui.window.MessageEvent('async', {
+      data: JSON.stringify({ event: { type: 'callback.delivered', taskId: 'task_1' } }),
+    }));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    release!();
+    await vi.waitFor(() => expect(ui.element('#messages')?.textContent).toContain(result.body));
+  });
 
   it('sends the chosen ZCode permission and saves it with the group draft', async () => {
     const ui = await setup(route());

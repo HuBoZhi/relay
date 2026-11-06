@@ -1,0 +1,53 @@
+{
+  "id": "traj_p0oca5fv39oa",
+  "version": 1,
+  "task": {
+    "title": "Fix automatic group-chat callback refresh"
+  },
+  "status": "completed",
+  "startedAt": "2026-11-06T13:59:20.987Z",
+  "completedAt": "2026-11-06T14:02:31.151Z",
+  "agents": [
+    {
+      "name": "default",
+      "role": "lead",
+      "joinedAt": "2026-11-06T13:59:21.225Z"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "chap_5yold1a47mxk",
+      "title": "Work",
+      "agentName": "default",
+      "startedAt": "2026-11-06T13:59:21.225Z",
+      "endedAt": "2026-11-06T14:02:31.151Z",
+      "events": [
+        {
+          "ts": 1793973561226,
+          "type": "decision",
+          "content": "Refresh group views on callback, stage and task SSE events; reconcile on stream open and retain refreshes received in flight: Refresh group views on callback, stage and task SSE events; reconcile on stream open and retain refreshes received in flight",
+          "raw": {
+            "question": "Refresh group views on callback, stage and task SSE events; reconcile on stream open and retain refreshes received in flight",
+            "chosen": "Refresh group views on callback, stage and task SSE events; reconcile on stream open and retain refreshes received in flight",
+            "alternatives": [],
+            "reasoning": "The bridge appends group replies while emitting callback.delivered, which the group-only frontend filter dropped."
+          },
+          "significance": "high"
+        }
+      ]
+    }
+  ],
+  "retrospective": {
+    "summary": "Fixed callback-driven group refresh, stream reconciliation and refresh races; 203 tests and 2 browser checks pass; built and deployed locally with data preserved.",
+    "approach": "Standard approach",
+    "confidence": 0.95
+  },
+  "commits": [],
+  "filesChanged": [],
+  "projectId": "AgentWorkforce/relay",
+  "tags": [],
+  "_trace": {
+    "startRef": "9d0155adbe6aa706ffbe8a39e3cdd8369c0e18b4",
+    "endRef": "9d0155adbe6aa706ffbe8a39e3cdd8369c0e18b4"
+  }
+}
