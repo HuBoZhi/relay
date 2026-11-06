@@ -7,6 +7,32 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
+test('GUI launcher runs PowerShell hidden, preserves arguments and propagates failures',
+  { skip: process.platform !== 'win32', timeout: 30000 }, async () => {
+    assert.doesNotMatch(tmpdir(), /^C:/i);
+    const root = await mkdtemp(join(tmpdir(), 'relay shortcut '));
+    try {
+      const script = join(root, 'fixture script.ps1');
+      const result = join(root, 'result.json');
+      await writeFile(script, `param($Output, $Value, [switch]$Background)
+Add-Type 'using System; using System.Runtime.InteropServices; public class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); }'
+@{visible=[ConsoleProbe]::IsWindowVisible([ConsoleProbe]::GetConsoleWindow());value=$Value;background=[bool]$Background;temp=$env:TEMP} | ConvertTo-Json | Set-Content -LiteralPath $Output -Encoding UTF8
+exit 7
+`);
+      const launcher = fileURLToPath(new URL('../scripts/Start-RelayHidden.vbs', import.meta.url));
+      for (const background of [false, true]) {
+        assert.throws(() => execFileSync('wscript.exe', ['//B', '//Nologo', launcher, script,
+          '-Output', result, '-Value', 'a space & 中文', ...(background ? ['-Background'] : [])],
+          { windowsHide: true, timeout: 10000 }), (error) => error.status === 7);
+        const data = JSON.parse((await readFile(result, 'utf8')).replace(/^\uFEFF/, ''));
+        assert.equal(data.visible, false);
+        assert.equal(data.value, 'a space & 中文');
+        assert.equal(data.background, background);
+        assert.doesNotMatch(data.temp, /^C:/i);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
 test(
   'Factory launch writes child output to files and returns without a terminal dependency',
   { skip: process.platform !== 'win32', timeout: 30000 },

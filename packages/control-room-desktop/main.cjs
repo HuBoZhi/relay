@@ -286,7 +286,7 @@ function loginItemEnabled() {
 function loginItemOptions() {
   return { name: 'RelaySystem', ...loginItemCommand(config, {
     executable:process.execPath,userDataPath:app.getPath('userData'),
-    windowsPowerShell:join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),
+    windowsScriptHost:join(process.env.SystemRoot,'System32','wscript.exe'),
     runtimeRoot:config.workspaceStateFile ? dirname(dirname(config.workspaceStateFile)) : '',
     consoleDir:dirname(process.execPath),
   }), openAsHidden:true };

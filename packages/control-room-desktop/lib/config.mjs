@@ -8,6 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
 const CREDENTIAL_ENV = ['RELAY_CONTROL_ROOM_TOKEN', 'RELAY_WORKSPACE_KEY', 'RELAY_API_KEY'];
 
@@ -128,9 +129,10 @@ export function loginItemArgs(config, userDataPath) {
   return args;
 }
 
-export function loginItemCommand(config, {executable,userDataPath,windowsPowerShell,runtimeRoot,consoleDir}) {
-  if(config.systemLauncher) return {path:windowsPowerShell,args:['-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass',
-    '-File',config.systemLauncher,'-RuntimeRoot',runtimeRoot,'-ConsoleDir',consoleDir]};
+export function loginItemCommand(config, {executable,userDataPath,windowsScriptHost,runtimeRoot,consoleDir}) {
+  if(config.systemLauncher) return {path:windowsScriptHost,args:['//B','//Nologo',
+    join(dirname(config.systemLauncher),'Start-RelayHidden.vbs'),config.systemLauncher,
+    '-RuntimeRoot',runtimeRoot,'-ConsoleDir',consoleDir,'-Background']};
   return {path:executable,args:loginItemArgs(config,userDataPath)};
 }
 
