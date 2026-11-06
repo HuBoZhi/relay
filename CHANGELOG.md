@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased - Minor]
 
+### Changed
+
+- `@agent-relay/control-room`: the group-chat identity picker offers Relay itself, and new users default to speaking as Relay instead of impersonating Codex; agents remain the only @-mention targets.
+
 ### Fixed
 
 - `@agent-relay/control-room-desktop`: Windows unified-launch shortcuts start without flashing a PowerShell console; login startup remains hidden in the tray.
