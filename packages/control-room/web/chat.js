@@ -457,7 +457,8 @@ function renderComposer() {
         }
         ${
           projects.list.length === 0 && projects.reason
-            ? `<span class="hint">${esc(projects.reason)}；可直接填写目录</span>`
+            ? `<span class="hint" title="${esc(projects.reason)}">暂时无法读取 ${esc(agentLabel(draft.participants[0]?.target))} 的项目。请在「客户端接入」检查连接，或直接填写目录。</span>
+              <button type="button" class="link-button" id="retry-projects">重新读取项目</button>`
             : ''
         }
         ${issue('mentions[0].project.path')}
@@ -867,6 +868,8 @@ function applyMention(agentId) {
 }
 
 function bindComposer() {
+  const retryProjects = $('#retry-projects');
+  if (retryProjects) retryProjects.onclick = () => void loadProjects(state.draft.participants[0]?.target);
   $('#conversation').oninput = () => readDraft();
   $('#conversation').onchange = () => readDraft();
   $$('#dispatch-button, #send-button').forEach((button) => { button.disabled = Boolean(state.sending); });

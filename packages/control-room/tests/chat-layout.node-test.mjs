@@ -26,13 +26,16 @@ test('chat keeps the composer in view with long histories and preserves reading 
       browser = await chromium.launch({ executablePath: process.env.RELAY_TEST_BROWSER, headless: true,
         args: [`--disk-cache-dir=${join(scratch, 'cache')}`] });
       const page = await browser.newPage();
+      let projectReads = 0;
       await page.route('**/api/**', (route) => {
         const path = new URL(route.request().url()).pathname;
         const body = path === '/api/groups' ? { groups: [{ id: 'group', name: '长会话', memberCount: 1, messageCount: 80 }] }
           : path === '/api/groups/group' ? { group: { id: 'group', name: '长会话' }, members: [], tasks: [],
             messages: Array.from({ length: 80 }, (_, i) => ({ id: String(i), kind: 'message',
               sender: { agentId: 'relay', displayName: 'Relay' }, mentions: [], body: `消息 ${i}\n第二行`, createdAt: new Date().toISOString() })) }
-          : { projects: [], models: [], reason: '测试客户端未运行' };
+          : path === '/api/async/projects' && ++projectReads % 2 === 0
+            ? { projects: [{ id: 'project', name: '已恢复的项目', path: 'D:\\Recovered' }] }
+            : { projects: [], models: [], reason: '测试客户端未运行' };
         return route.fulfill({ json: body });
       });
       for (const [width, height] of [[1360, 900], [1080, 700], [1024, 640]]) {
@@ -46,6 +49,9 @@ test('chat keeps the composer in view with long histories and preserves reading 
         await page.locator('#messages').evaluate((el) => { el.scrollTop = 100; });
         await page.getByRole('button', { name: '刷新', exact: true }).click();
         await page.waitForFunction(() => document.querySelector('#messages').scrollTop === 100);
+        await page.getByRole('button', { name: '重新读取项目' }).click();
+        await page.locator('#path-select').waitFor();
+        assert.match(await page.locator('#path-select').textContent(), /已恢复的项目/);
       }
     } finally {
       await browser?.close();

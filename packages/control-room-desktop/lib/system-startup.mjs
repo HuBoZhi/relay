@@ -11,4 +11,5 @@ export function startSystemClients(config, { consoleDir, env = process.env, log 
   child.on('error', (error) => log(`[启动] 客户端启动失败：${error.message}`));
   child.on('exit', (code) => { if (code) log(`[启动] 客户端启动脚本退出：${code}`); });
   child.unref();
+  return child;
 }

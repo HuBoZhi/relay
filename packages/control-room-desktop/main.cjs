@@ -717,7 +717,12 @@ async function start() {
   if (quitting) return;
   if (win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');
   const { startSystemClients } = await import('./lib/system-startup.mjs');
-  if (!config.smoke) startSystemClients(config, { consoleDir: dirname(process.execPath) });
+  if (!config.smoke) {
+    const bootstrap = startSystemClients(config, { consoleDir: dirname(process.execPath) });
+    bootstrap?.once('exit', () => {
+      if (!quitting && win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');
+    });
+  }
   await refreshStatus();
   if (config.smoke) {
     // The tray is the part no screenshot can prove, so the smoke run states it.
