@@ -1,4 +1,4 @@
-param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelayControlRoom',[switch]$Background)
+param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelaySystem',[switch]$Background)
 $ErrorActionPreference='Stop'
 $stateFile=Join-Path $RuntimeRoot 'data/workspace.private.json'
 if(!(Test-Path -LiteralPath $stateFile)){throw 'Existing Relay workspace state is required; no new workspace will be created'}

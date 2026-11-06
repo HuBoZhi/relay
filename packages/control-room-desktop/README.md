@@ -1,4 +1,4 @@
-# 协作控制中心 · 桌面托盘版（`@agent-relay/control-room-desktop`）
+# Relay系统 · 桌面托盘版（`@agent-relay/control-room-desktop`）
 
 把 [`@agent-relay/control-room`](../control-room) 的群聊、任务工作台与观察界面装进一个桌面外壳，
 并让外壳自己承载异步任务引擎（消息受理、派发队列、回传路由）。
@@ -86,7 +86,7 @@ Factory 由独立隐藏宿主启动，标准输出和错误分别写入适配器
 
 统一的是当前已验收的“托管 Relaycast＋本机桌面适配器＋控制台”系统，远端后台本来就持续运行。安装版官方 CLI 的 native broker 不支持 Windows，统一入口不会启动或冒充该 broker。不要把 `agent-relay node status` 中的 broker 停止状态误当成托管消息服务断开。
 
-默认安装到 `D:\Programs\RelayControlRoom`，复用 `D:\Programs\AgentRelay\data\workspace.private.json`，创建用户登录启动项 `RelayControlRoom` 和开始菜单“Relay 可视化控制台”。登录后以 `--no-window` 驻留托盘，右键菜单显示运行状态并可通过系统默认浏览器打开网页。原启动项记录在安装目录的 `startup-install-record.json`。
+默认安装到 `D:\Programs\RelaySystem`，复用 `D:\Programs\AgentRelay\data\workspace.private.json`，创建用户登录启动项 `RelaySystem` 以及开始菜单与桌面上的“Relay系统”快捷方式（旧名“Relay 可视化控制台”的快捷方式在重装时删除）。登录后以 `--no-window` 驻留托盘，右键菜单显示运行状态并可通过系统默认浏览器打开网页。原启动项记录在安装目录的 `startup-install-record.json`。
 
 托盘的开机启动开关保留状态文件路径、端口及用户数据目录；每次启动重新读取当前凭据，避免继承不到终端环境变量而进入演示模式。未指定状态文件的临时令牌会话不能启用开机启动。指定 `--user-data-dir` 时，配置、日志和运行临时目录位于该目录下。
 
@@ -163,8 +163,8 @@ npm run package:win -w @agent-relay/control-room-desktop
 
 产物在 `packages/control-room-desktop/release/`：
 
-- `RelayControlRoom-<版本>-便携版.exe`：免安装，双击即用，适合拷给别人。
-- `RelayControlRoom-<版本>-安装包.exe`：可选择安装目录、创建开始菜单与桌面快捷方式。
+- `RelaySystem-<版本>-便携版.exe`：免安装，双击即用，适合拷给别人。
+- `RelaySystem-<版本>-安装包.exe`：可选择安装目录、创建开始菜单与桌面快捷方式。
 
 服务端依赖（含 SDK）由 esbuild 内联进 `dist/server.mjs`，因此安装包不需要 `node_modules`，
 也不会出现「外壳版本与 CLI 版本不一致」这类问题。

@@ -2,7 +2,7 @@
   "name": "@agent-relay/control-room-desktop",
   "version": "14.0.0",
   "private": true,
-  "description": "协作控制中心桌面托盘外壳：启动本地服务、用系统托盘管理窗口与进程",
+  "description": "Relay系统桌面托盘外壳：启动本地服务、用系统托盘管理窗口与进程",
   "type": "module",
   "main": "main.cjs",
   "engines": {

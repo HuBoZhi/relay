@@ -1,6 +1,6 @@
 param(
   [ValidateSet('Start','Watch','Stop','Status')][string]$Action='Start',
-  [string]$ConsoleDir='D:\Programs\RelayControlRoom'
+  [string]$ConsoleDir='D:\Programs\RelaySystem'
 )
 $ErrorActionPreference='Stop'
 $ConsoleDir=(Resolve-Path -LiteralPath $ConsoleDir).Path

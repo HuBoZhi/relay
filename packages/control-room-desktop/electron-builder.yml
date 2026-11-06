@@ -1,6 +1,6 @@
 # 打包配置：产出免安装便携版与安装包，两者都带系统托盘。
 appId: com.agentrelay.controlroom
-productName: 协作控制中心
+productName: Relay系统
 copyright: Apache-2.0
 # electron 提升安装在工作区根目录，显式声明版本，打包器才不会找不到它。
 electronVersion: 33.4.11
@@ -33,7 +33,7 @@ win:
       arch: [x64]
 
 portable:
-  artifactName: RelayControlRoom-${version}-便携版.${ext}
+  artifactName: RelaySystem-${version}-便携版.${ext}
 
 nsis:
   oneClick: false
@@ -41,5 +41,5 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 协作控制中心
-  artifactName: RelayControlRoom-${version}-安装包.${ext}
+  shortcutName: Relay系统
+  artifactName: RelaySystem-${version}-安装包.${ext}

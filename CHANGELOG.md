@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@agent-relay/control-room-desktop`: the desktop app is now named Relay系统 end to end — window title, tray label, login item (`RelaySystem`), installer and artifact names (`RelaySystem-<version>-*.exe`), and its start-menu and desktop shortcuts. It installs to `D:\Programs\RelaySystem`; reinstalling removes the previous "Relay 可视化控制台" shortcut and `RelayControlRoom` startup entry.
+
 - `@agent-relay/control-room-desktop`: the dispatch bridge ships inside the app. It is started and stopped with the app (one icon, one quit), configured from Settings → 内置派发桥接, and `relay-dispatch-bridge` remains available for headless installs.
 
 - `@agent-relay/control-room-desktop`: the window opens on the group chat instead of the observer graph, and the menu and tray gained a 群聊 entry; group results raise a notification that deep-links to the conversation.

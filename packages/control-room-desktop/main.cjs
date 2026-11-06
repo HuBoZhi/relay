@@ -184,7 +184,7 @@ async function createWindow() {
     minWidth: 1080,
     minHeight: 700,
     backgroundColor: '#0b1015',
-    title: 'Relay 协作中枢',
+    title: 'Relay系统',
     icon: ICON,
     show: false,
     // A light native title bar plus its grey menu strip looked bolted onto a
@@ -284,7 +284,7 @@ function loginItemEnabled() {
 }
 
 function loginItemOptions() {
-  return { name: 'RelayControlRoom', ...loginItemCommand(config, {
+  return { name: 'RelaySystem', ...loginItemCommand(config, {
     executable:process.execPath,userDataPath:app.getPath('userData'),
     windowsPowerShell:join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),
     runtimeRoot:config.workspaceStateFile ? dirname(dirname(config.workspaceStateFile)) : '',
@@ -440,8 +440,8 @@ function showStatusHelp() {
 function showAbout() {
   void dialog.showMessageBox({
     type: 'info',
-    title: '关于 Relay 协作中枢',
-    message: 'Relay 协作中枢',
+    title: '关于 Relay系统',
+    message: 'Relay系统',
     detail:
       `版本 ${app.getVersion()}\n` +
       `任务数据：${engine ? engine.dataRoot : '未启用'}\n` +
@@ -631,7 +631,7 @@ async function start() {
     config = configModule.resolveConfig();
     config.profilePath = app.getPath('userData');
   } catch (error) {
-    dialog.showErrorBox('无法启动 Relay 协作中枢', error instanceof Error ? error.message : String(error));
+    dialog.showErrorBox('无法启动 Relay系统', error instanceof Error ? error.message : String(error));
     app.exit(1);
     return;
   }

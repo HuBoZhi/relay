@@ -116,9 +116,9 @@ export function buildTrayMenu({
 
 /** One-line tray tooltip: mode plus the healthiest fact available. */
 export function trayTooltip({ mode, status, error, tasks = null }) {
-  if (error) return `协作控制中心 · ${mode} · ${error}`;
+  if (error) return `Relay系统 · ${mode} · ${error}`;
   const channels = status?.channels;
   const suffix = channels === null || channels === undefined ? '状态未知' : `${channels} 个频道`;
   const taskSuffix = tasks ? ` · 在途 ${tasks.inFlight ?? '未知'}` : '';
-  return `协作控制中心 · ${mode} · ${suffix}${taskSuffix}`;
+  return `Relay系统 · ${mode} · ${suffix}${taskSuffix}`;
 }

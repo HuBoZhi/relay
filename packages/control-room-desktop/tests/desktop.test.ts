@@ -210,13 +210,13 @@ describe('buildTrayMenu', () => {
 describe('trayTooltip', () => {
   it('carries the mode and channel count', () => {
     expect(trayTooltip({ mode: '演示数据', status: summarize(bootstrap), error: null })).toBe(
-      '协作控制中心 · 演示数据 · 2 个频道'
+      'Relay系统 · 演示数据 · 2 个频道'
     );
   });
 
   it('reports the failure when there is no status', () => {
     expect(trayTooltip({ mode: '只读观察', status: null, error: '本地服务无响应' })).toBe(
-      '协作控制中心 · 只读观察 · 本地服务无响应'
+      'Relay系统 · 只读观察 · 本地服务无响应'
     );
   });
 
@@ -228,7 +228,7 @@ describe('trayTooltip', () => {
         error: null,
         tasks: { inFlight: 3 },
       })
-    ).toBe('协作控制中心 · 演示数据 · 2 个频道 · 在途 3');
+    ).toBe('Relay系统 · 演示数据 · 2 个频道 · 在途 3');
   });
 });
 
