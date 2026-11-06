@@ -31,6 +31,7 @@ const {
   ipcMain,
   nativeImage,
   shell,
+  screen,
 } = require('electron');
 
 // Keep the installed app's profile, logs, and child-process scratch alongside its
@@ -91,6 +92,7 @@ let startManagedBridge = null;
 let appMenuModel = [];
 let MENU_ACTIONS = new Set();
 let settingsApi = null;
+let windowStateApi = null;
 
 let room = null;
 let engine = null;
@@ -111,6 +113,7 @@ let quitting = false;
 let shutdownPending = null;
 let shutdownComplete = false;
 let pendingShow = false;
+let restoreMaximized = false;
 const lifecycleAbort = new AbortController();
 let hideNoticed = false;
 let statusTimer = null;
@@ -153,6 +156,7 @@ async function loadHelpers() {
   probeTasks = roomModule.probeTasks;
   loadServerModule = roomModule.loadServerModule;
   settingsApi = settingsModule;
+  windowStateApi = await import('./lib/window-state.mjs');
   return configModule;
 }
 
@@ -164,6 +168,7 @@ function showWindow() {
     return;
   }
   if (win.isMinimized()) win.restore();
+  if (restoreMaximized) { win.maximize(); restoreMaximized = false; }
   win.show();
   win.focus();
 }
@@ -187,11 +192,13 @@ async function createWindow() {
     showWindow();
     return;
   }
+  const windowStateFile = join(app.getPath('userData'), 'window-state.json');
+  const restored = windowStateApi.loadWindowState(windowStateFile, screen.getAllDisplays().map((display) => display.workArea));
+  restoreMaximized = restored.maximized;
   win = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 1080,
-    minHeight: 700,
+    ...restored.bounds,
+    minWidth: Math.min(900, restored.bounds.width),
+    minHeight: Math.min(600, restored.bounds.height),
     backgroundColor: '#0b1015',
     title: 'Relay系统',
     icon: ICON,
@@ -227,10 +234,13 @@ async function createWindow() {
   });
 
   win.once('ready-to-show', () => {
+    if (restored.maximized && (config.showWindow || pendingShow)) { win.maximize(); restoreMaximized = false; }
     if (config.showWindow || config.smoke || pendingShow) win.show();
   });
 
   win.on('close', (event) => {
+    try { windowStateApi.saveWindowState(windowStateFile, win); }
+    catch (error) { recordFailure('窗口状态保存失败', error); }
     if (quitting) return;
     // Product default: closing the window quits the app, engine included. Tray
     // mode is an explicit opt-in setting, never a surprise.
@@ -248,6 +258,7 @@ async function createWindow() {
 
   // The app opens on the group chat: a topic you can talk in is the point of the
   // product, and the observer is one click away from the menu.
+  win.webContents.setZoomLevel(restored.zoomLevel);
   await win.loadURL(`${room.url}/chat.html`);
 
   if (config.smoke) {

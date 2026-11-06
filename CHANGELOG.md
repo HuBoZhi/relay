@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/control-room-desktop`: remember window position, size, maximization and zoom, and keep the window reachable when a display is removed or resized.
+
 - `@agent-relay/control-room-desktop`: choose the task data directory with a native folder picker, open data and logs from settings, and restart the app to apply pending preferences.
 
 - `@agent-relay/control-room`: the model field in the dispatch form is a list of the models each client can select right now, read from the client itself (`GET /api/async/models`, bridged to the client's own catalogue: Codex's fetched model cache, ZCode's provider rules, WorkBuddy's craft-agent models). A model reports its reasoning levels, a retired id is replaced by one the client still offers, and a client with no readable catalogue keeps a typed field that says why.
