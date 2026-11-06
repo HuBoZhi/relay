@@ -180,7 +180,7 @@ describe('chat page', () => {
           text: async () => JSON.stringify(payload),
         };
       }
-      const body = handler(call);
+      const body = await handler(call);
       const status = (body as { status?: number })?.status ?? 200;
       const payload = (body as { body?: unknown })?.body ?? body;
       return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(payload) };
@@ -232,6 +232,48 @@ describe('chat page', () => {
       return { status: 404, body: { error: '未知接口' } };
     };
   }
+
+  it('keeps the message draft and caret when a background refresh replaces the conversation', async () => {
+    const ui = await setup(route());
+    const input = ui.element('#body-input') as HTMLTextAreaElement;
+    input.value = '正在输入的草稿';
+    input.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+    input.focus();
+    input.setSelectionRange(2, 4);
+    ui.element('#refresh-button')!.click();
+    await settle(); await settle();
+    const restored = ui.element('#body-input') as HTMLTextAreaElement;
+    expect(restored.value).toBe('正在输入的草稿');
+    expect(ui.window.document.activeElement).toBe(restored);
+    expect([restored.selectionStart, restored.selectionEnd]).toEqual([2, 4]);
+  });
+
+  it('does not send while the Chinese input method is composing', async () => {
+    const ui = await setup(route());
+    const input = ui.element('#body-input') as HTMLTextAreaElement;
+    input.value = '还没有确认的中文';
+    input.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, isComposing: true, bubbles: true }));
+    await settle();
+    expect(ui.calls.some((call) => call.init?.method === 'POST')).toBe(false);
+  });
+
+  it('persists a per-group draft and refuses duplicate sends while a request is pending', async () => {
+    let release!: (value: unknown) => void;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const normal = route();
+    const ui = await setup((call) => call.init?.method === 'POST' ? pending : normal(call));
+    const input = ui.element('#body-input') as HTMLTextAreaElement;
+    input.value = '发送一次就够了';
+    input.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+    expect(JSON.parse(ui.window.localStorage.getItem('relay.chat.draft.grp_1')!).body).toBe(input.value);
+    ui.element('#send-button')!.click();
+    input.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+    await settle();
+    expect(ui.calls.filter((call) => call.init?.method === 'POST')).toHaveLength(1);
+    release({ status: 202, body: {} });
+    await settle(); await settle();
+    expect(JSON.parse(ui.window.localStorage.getItem('relay.chat.draft.grp_1')!).body).toBe('');
+  });
 
   it('renders the request with its target, model, and project, and the result with its delivery', async () => {
     const ui = await setup(route());

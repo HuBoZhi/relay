@@ -204,11 +204,30 @@ async function loadGroups() {
 }
 
 async function openGroup(groupId) {
+  const request = (openGroup.request = (openGroup.request || 0) + 1);
+  const changed = state.activeId !== groupId;
+  if (changed) readDraft();
   try {
-    state.view = await api(`/api/groups/${encodeURIComponent(groupId)}`);
+    const view = await api(`/api/groups/${encodeURIComponent(groupId)}`);
+    if (request !== openGroup.request) return;
+    state.view = view;
     state.activeId = groupId;
+    if (changed) {
+      let stored;
+      try { stored = JSON.parse(localStorage.getItem(`relay.chat.draft.${groupId}`) || 'null'); } catch {}
+      state.draft = {
+        body: typeof stored?.body === 'string' ? stored.body : '',
+        path: typeof stored?.path === 'string' ? stored.path : '',
+        projectId: typeof stored?.projectId === 'string' ? stored.projectId : '',
+        participants: Array.isArray(stored?.participants) && stored.participants.length &&
+          stored.participants.every((p) => p && AGENTS.some((a) => a.id === p.target) &&
+            typeof p.model === 'string' && typeof p.reasoning === 'string')
+          ? stored.participants : [{ target: 'zcode', ...AGENT_DEFAULTS.zcode }],
+      };
+    }
     state.issues = [];
   } catch (error) {
+    if (request !== openGroup.request) return;
     state.view = null;
     toast(error.message, 'bad');
   }
@@ -451,6 +470,15 @@ function renderComposer() {
 
 function renderConversation() {
   const root = $('#conversation');
+  if (state.composing) return;
+  const previousMessages = $('#messages');
+  const sameGroup = root.dataset.group === state.activeId;
+  const keepScroll = sameGroup && previousMessages &&
+    previousMessages.scrollHeight - previousMessages.clientHeight - previousMessages.scrollTop > 48;
+  const scrollTop = previousMessages?.scrollTop || 0;
+  const focused = root.contains(document.activeElement) ? document.activeElement : null;
+  const selection = focused && 'selectionStart' in focused ? [focused.selectionStart, focused.selectionEnd] : null;
+  const focusedId = focused?.id;
   if (!state.view) {
     root.innerHTML = `<div class="conv-empty">
       <strong>${state.engineError ? '群聊当前不可用' : '还没有打开任何群'}</strong>
@@ -480,9 +508,17 @@ function renderConversation() {
     </div>
     ${renderComposer()}`;
 
+  root.dataset.group = state.activeId;
   const messagesEl = $('#messages');
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  messagesEl.scrollTop = keepScroll ? scrollTop : messagesEl.scrollHeight;
   bindComposer();
+  if (sameGroup && focusedId) {
+    const restored = document.getElementById(focusedId);
+    if (restored) {
+      restored.focus({ preventScroll: true });
+      if (selection && restored.setSelectionRange) restored.setSelectionRange(...selection);
+    }
+  }
   // One fetch per client: the guard keeps the re-render from asking again.
   const primaryTarget = state.draft.participants[0]?.target ?? null;
   if (primaryTarget && state.projects.client !== primaryTarget) void loadProjects(primaryTarget);
@@ -515,6 +551,12 @@ function readDraft() {
   } else if (pathInput) {
     state.draft.path = pathInput.value;
   }
+  saveCurrentDraft();
+}
+
+function saveCurrentDraft() {
+  if (!state.activeId) return;
+  try { localStorage.setItem(`relay.chat.draft.${state.activeId}`, JSON.stringify(state.draft)); } catch {}
 }
 
 /**
@@ -550,7 +592,7 @@ function mentionsFor(work) {
 }
 
 async function send(work) {
-  if (!state.view) return;
+  if (!state.view || state.sending) return;
   readDraft();
   const body = state.draft.body.trim();
   state.issues = [];
@@ -576,14 +618,18 @@ async function send(work) {
       return;
     }
   }
-  const button = $(work ? '#dispatch-button' : '#send-button');
-  if (button) button.disabled = true;
+  const sendingGroup = state.activeId;
+  state.sending = true;
+  $$('#dispatch-button, #send-button').forEach((button) => { button.disabled = true; });
   try {
     await api(`/api/groups/${encodeURIComponent(state.view.group.id)}/messages`, {
       method: 'POST',
       body: JSON.stringify({ sender: senderPayload(), body, mentions: mentionsFor(work) }),
     });
-    state.draft.body = '';
+    if (state.activeId === sendingGroup && state.draft.body.trim() === body) {
+      state.draft.body = '';
+      saveCurrentDraft();
+    }
     await loadGroups();
     await openGroup(state.activeId);
     toast(work ? '已发出派活请求' : '已发送');
@@ -592,8 +638,8 @@ async function send(work) {
     toast(error.message, 'bad');
     renderConversation();
   } finally {
-    const again = $(work ? '#dispatch-button' : '#send-button');
-    if (again) again.disabled = false;
+    state.sending = false;
+    $$('#dispatch-button, #send-button').forEach((button) => { button.disabled = false; });
   }
 }
 
@@ -818,6 +864,9 @@ function applyMention(agentId) {
 }
 
 function bindComposer() {
+  $('#conversation').oninput = () => readDraft();
+  $('#conversation').onchange = () => readDraft();
+  $$('#dispatch-button, #send-button').forEach((button) => { button.disabled = Boolean(state.sending); });
   const body = $('#body-input');
   if (body) {
     body.oninput = () => {
@@ -825,6 +874,7 @@ function bindComposer() {
       openMentionMenu();
     };
     body.onkeydown = (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
       const menu = $('#mention-menu');
       const open = menu && !menu.hidden;
       if (open) {
@@ -858,6 +908,12 @@ function bindComposer() {
     body.onblur = () => {
       // Let a click on the menu land before closing it.
       setTimeout(closeMentionMenu, 120);
+    };
+    body.oncompositionstart = () => { state.composing = true; };
+    body.oncompositionend = () => {
+      state.composing = false;
+      state.draft.body = body.value;
+      renderConversation();
     };
   }
 
@@ -992,6 +1048,9 @@ async function mountDesktopMenu() {
 
 $('#me-select').onchange = () => {
   state.me.agentId = $('#me-select').value;
+  if (/^chat_(relay|codex|zcode|workbuddy|factory)_main$/.test(state.me.chatId)) {
+    state.me.chatId = `chat_${state.me.agentId}_main`;
+  }
   saveMe();
   renderMe();
   // The sender changed, so the bubbles that count as "mine" changed too.
