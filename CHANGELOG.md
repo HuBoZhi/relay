@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room-desktop`: settings changes report disk or Windows startup failures without changing live preferences, and connector changes consistently require a restart until applied.
+
 - `@agent-relay/control-room-desktop`: launch the native Windows app directly, keep login startup in the tray, and bootstrap integrated clients after the window appears so slow bridges do not make launch look unresponsive.
 
 - `@agent-relay/control-room-desktop`: Windows unified-launch shortcuts start without flashing a PowerShell console; login startup remains hidden in the tray.

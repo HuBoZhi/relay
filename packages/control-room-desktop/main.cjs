@@ -98,6 +98,8 @@ let managedBridge = null;
 let unsubscribeEngine = null;
 let settings = null;
 let settingsFile = null;
+let activeSettings = null;
+let settingsUpdates = Promise.resolve();
 let win = null;
 let tray = null;
 let status = null;
@@ -363,12 +365,10 @@ async function toggleLoginAtStartup() {
     });
     return;
   }
-  app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: next });
-  if (settings) {
-    settings = { ...settings, loginAtStartup: next };
-    await settingsApi.saveSettings(settingsFile, settings).catch(() => undefined);
+  try { await updateSettings({ loginAtStartup: next }); }
+  catch (error) {
+    void dialog.showMessageBox({ type: 'error', title: '设置未保存', message: error.message, buttons: ['知道了'] });
   }
-  updateTray();
 }
 
 async function refreshStatus() {
@@ -527,28 +527,32 @@ function settingsView() {
   };
 }
 
+function updateSettings(patch) {
+  const pending = settingsUpdates.catch(() => {}).then(async () => {
+    const { applySettingsPatch, settingsNeedRestart } = await import('./lib/settings-transaction.mjs');
+    if (patch.loginAtStartup === true && config.token && !config.workspaceStateFile) {
+      throw new Error('当前工作区没有可供登录启动读取的凭据文件，请先配置工作区状态文件。');
+    }
+    settings = await applySettingsPatch(settings, patch, {
+      save: (value) => settingsApi.saveSettings(settingsFile, value),
+      loginEnabled: loginItemEnabled(),
+      applyLogin: (enabled) => {
+        if (!app.isPackaged) throw new Error('开发模式不支持开机启动，请使用安装版。');
+        app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: enabled });
+      },
+    });
+    updateTray();
+    return { ...settingsView(), restartRequired: settingsNeedRestart(activeSettings, settings) };
+  });
+  settingsUpdates = pending;
+  return pending;
+}
+
 function registerIpc() {
   ipcMain.handle('desktop:menu', () => appMenuModel);
   ipcMain.handle('desktop:run', (_event, id) => runMenuAction(String(id)));
   ipcMain.handle('desktop:settings:get', () => settingsView());
-  ipcMain.handle('desktop:settings:patch', async (_event, patch) => {
-    if (!settings) return settingsView();
-    const next = settingsApi.mergeSettings(settings, patch);
-    const dataRootChanged = next.dataRoot !== settings.dataRoot;
-    // Adapters are built at startup, so a new bridge needs a restart to take over.
-    const bridgesChanged = JSON.stringify(next.bridges) !== JSON.stringify(settings.bridges);
-    if (app.isPackaged && next.loginAtStartup !== loginItemEnabled()) {
-      app.setLoginItemSettings({ openAtLogin: next.loginAtStartup, openAsHidden: true });
-    }
-    settings = next;
-    await settingsApi.saveSettings(settingsFile, settings).catch((error) => {
-      say(`[设置] 保存失败：${error.message}`);
-    });
-    updateTray();
-    // A new data root applies on the next start: swapping the store under a live
-    // engine would leave tasks in two places with no single answer.
-    return { ...settingsView(), restartRequired: dataRootChanged || bridgesChanged };
-  });
+  ipcMain.handle('desktop:settings:patch', (_event, patch) => updateSettings(patch));
 }
 
 /** The menu bar is drawn in the page, so its shortcuts are bound here. */
@@ -640,6 +644,7 @@ async function start() {
   // keep even that file off the system drive.
   settingsFile = process.env.RELAY_DESKTOP_SETTINGS?.trim() || join(app.getPath('userData'), 'settings.json');
   settings = await settingsApi.loadSettings(settingsFile);
+  activeSettings = settings;
 
   try {
     await startEngine();
