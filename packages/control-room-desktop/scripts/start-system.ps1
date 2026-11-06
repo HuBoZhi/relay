@@ -1,4 +1,4 @@
-param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelaySystem',[switch]$Background)
+param([string]$RuntimeRoot='D:\Programs\AgentRelay',[string]$ConsoleDir='D:\Programs\RelaySystem',[switch]$Background,[switch]$ClientsOnly)
 $ErrorActionPreference='Stop'
 $stateFile=Join-Path $RuntimeRoot 'data/workspace.private.json'
 if(!(Test-Path -LiteralPath $stateFile)){throw 'Existing Relay workspace state is required; no new workspace will be created'}
@@ -18,6 +18,7 @@ try{
       $steps+=@{client=$client;status=$output}
     }catch{$steps+=@{client=$client;status='startup_error';error=$_.Exception.Message}}
   }
+  if($ClientsOnly){return}
   $running=Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -ieq $record.installedExecutable -and $_.CommandLine -notmatch '--type='}
   # Login startup stays a silent tray resident; a manual launch (the Start menu
   # shortcut) opens the window, because that is what clicking an app icon means.

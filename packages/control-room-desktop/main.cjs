@@ -97,6 +97,7 @@ let windowStateApi = null;
 let room = null;
 let engine = null;
 let managedBridge = null;
+let clientBootstrap = null;
 let unsubscribeEngine = null;
 let settings = null;
 let settingsFile = null;
@@ -719,6 +720,7 @@ async function start() {
   const { startSystemClients } = await import('./lib/system-startup.mjs');
   if (!config.smoke) {
     const bootstrap = startSystemClients(config, { consoleDir: dirname(process.execPath) });
+    clientBootstrap = bootstrap;
     bootstrap?.once('exit', () => {
       if (!quitting && win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');
     });
@@ -753,6 +755,7 @@ if (!locked) {
     event.preventDefault();
     quitting = true;
     lifecycleAbort.abort();
+    clientBootstrap?.kill();
     if (statusTimer) clearInterval(statusTimer);
     if (!shutdownPending) {
       shutdownPending = import('./lib/shutdown.mjs').then(({ shutdownDesktop }) =>

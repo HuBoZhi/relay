@@ -158,9 +158,10 @@ Windows 原生标题栏和它的灰色菜单条没法跟着深色界面走，所
 ## 打包
 
 本地统一入口由 `install-local.ps1 -SystemLauncher <路径>` 部署时，会在启动脚本旁放置
-`Start-RelayHidden.vbs`。桌面和开始菜单快捷方式通过 Windows 的 `wscript.exe` 调用它，
-在创建 PowerShell 子进程时就隐藏控制台，避免 `powershell.exe -WindowStyle Hidden` 启动时的黑框闪烁。
-手动入口保留打开窗口的行为，登录启动额外传入 `-Background`，保持托盘驻留。
+兼容旧脚本的 `Start-RelayHidden.vbs`。桌面、开始菜单和登录启动均直接运行原生 GUI，
+不依赖 PowerShell 控制台；仅登录入口附加 `--no-window`，手动入口显示窗口。
+集成客户端由应用在窗口出现后以隐藏进程初始化（`-ClientsOnly`），不会反过来启动或看护 GUI。
+退出应用会取消尚未结束的初始化；再次点击快捷方式恢复已有实例。
 
 ```bash
 npm run package:win -w @agent-relay/control-room-desktop

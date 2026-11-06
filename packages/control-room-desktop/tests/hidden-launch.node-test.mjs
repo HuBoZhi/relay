@@ -15,9 +15,9 @@ test('native app bootstraps clients hidden without holding up the window',
     try {
       const launcher = join(root, 'start.ps1');
       const result = join(root, 'ready.json');
-      await writeFile(launcher, `param($RuntimeRoot,$ConsoleDir,[switch]$Background)
+      await writeFile(launcher, `param($RuntimeRoot,$ConsoleDir,[switch]$Background,[switch]$ClientsOnly)
 Start-Sleep -Milliseconds 300
-@{root=$RuntimeRoot;console=$ConsoleDir;background=[bool]$Background} | ConvertTo-Json | Set-Content -LiteralPath '${result.replaceAll("'", "''")}' -Encoding UTF8
+@{root=$RuntimeRoot;console=$ConsoleDir;background=[bool]$Background;clientsOnly=[bool]$ClientsOnly} | ConvertTo-Json | Set-Content -LiteralPath '${result.replaceAll("'", "''")}' -Encoding UTF8
 `);
       startSystemClients({ systemLauncher: launcher, workspaceStateFile: join(root, 'data', 'workspace.json') },
         { consoleDir: root, log() {} });
@@ -28,7 +28,7 @@ Start-Sleep -Milliseconds 300
         try { data = JSON.parse((await readFile(result, 'utf8')).replace(/^\uFEFF/, '')); break; }
         catch { await delay(50); }
       }
-      assert.deepEqual(data, { root, console: root, background: true });
+      assert.deepEqual(data, { root, console: root, background: true, clientsOnly: true });
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
