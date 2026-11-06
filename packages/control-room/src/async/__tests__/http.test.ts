@@ -84,6 +84,19 @@ function post(url: string, body: unknown, headers: Record<string, string> = {}):
 }
 
 describe('async HTTP API', () => {
+  it('deletes groups through a same-origin JSON mutation and refuses stale access', async () => {
+    await withServer(async (base, engine) => {
+      const { group } = await engine.createGroup({ name: '删除接口测试', creator: { agentId: 'relay', app: 'relay', device: 'local', chatId: 'local' } });
+      const endpoint = `${base}/api/groups/${group.id}/delete`;
+      expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403);
+      expect(await engine.group(group.id)).toBeTruthy();
+      expect((await post(endpoint, {})).status).toBe(200);
+      expect((await fetch(`${base}/api/groups/${group.id}`)).status).toBe(404);
+      expect(await (await fetch(`${base}/api/groups`)).json()).toEqual({ groups: [] });
+      expect((await post(endpoint, {})).status).toBe(200);
+      expect((await post(`${base}/api/groups/missing/delete`, {})).status).toBe(404);
+    });
+  });
   it('accepts a task with 202 and a queued receipt', async () => {
     await withServer(async (base) => {
       const response = await post(`${base}/api/async/tasks`, payload());

@@ -91,6 +91,28 @@ function workMention(overrides: Partial<GroupMention> = {}): GroupMention {
 }
 
 describe('group chat', () => {
+  it('deletes a group durably without deleting its tasks or resurrecting it on callback', async () => {
+    const dataRoot = await scratchRoot();
+    const engine = new AsyncEngine({ dataRoot, adapters: [new FakeZcode()] });
+    const { group } = await engine.createGroup({ name: '可删除的群', creator: codex });
+    const posted = await engine.postGroupMessage(group.id, { sender: codex, body: '继续执行', mentions: [workMention()] });
+    const receipt = posted.receipt!;
+    await engine.deleteGroup(group.id);
+    await engine.deleteGroup(group.id); // Repeated requests are harmless.
+    expect(await engine.group(group.id)).toBeNull();
+    expect(await engine.listGroups()).toEqual([]);
+    await expect(engine.postGroupMessage(group.id, { sender: codex, body: '迟到的消息' })).rejects.toThrow('未找到群');
+    await engine.recordCallback({ taskId: receipt.taskId, stageId: receipt.stageId!, runId: receipt.runId!, outcome: 'completed', summary: '执行完成' });
+    expect(await engine.task(receipt.taskId)).toBeTruthy();
+    expect(await engine.listGroups()).toEqual([]);
+    await engine.close();
+    const reopened = new AsyncEngine({ dataRoot });
+    expect(await reopened.listGroups()).toEqual([]);
+    const replacement = await reopened.createGroup({ name: group.name, creator: codex });
+    expect(replacement.group.id).not.toBe(group.id);
+    expect(replacement.tasks).toEqual([]);
+    await reopened.close();
+  });
   it('opens one group per topic name, with the creator as owner', async () => {
     const engine = new AsyncEngine({ dataRoot: await scratchRoot() });
     const first = await engine.createGroup({ name: '20261104-MediaDock-需求开发2', creator: codex });

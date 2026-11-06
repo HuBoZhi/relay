@@ -199,6 +199,16 @@ async function loadGroups() {
     const data = await api('/api/groups');
     state.groups = data.groups || [];
     state.engineError = null;
+    if (state.activeId && !state.groups.some((group) => group.id === state.activeId)) {
+      const removed = state.activeId;
+      openGroup.request = (openGroup.request || 0) + 1;
+      state.activeId = null;
+      state.view = null;
+      try { localStorage.removeItem(`relay.chat.draft.${removed}`); } catch {}
+      if (location.hash === `#group=${encodeURIComponent(removed)}`) history.replaceState(null, '', location.pathname + location.search);
+      if (state.groups[0]) await openGroup(state.groups[0].id);
+      else renderConversation();
+    }
   } catch (error) {
     state.groups = [];
     state.engineError = error;
@@ -507,6 +517,7 @@ function renderConversation() {
         }</div>
       </div>
       <div class="members">${members.map(memberChip).join('')}</div>
+      <button type="button" id="delete-group-button" class="group-delete"${state.sending || deleteGroup.busy ? ' disabled' : ''}>删除群组</button>
     </div>
     <div class="messages" id="messages">
       ${messages.length ? messages.map(renderMessage).join('') : '<div class="notice">还没有消息，说第一句吧。</div>'}
@@ -517,6 +528,7 @@ function renderConversation() {
   const messagesEl = $('#messages');
   messagesEl.scrollTop = keepScroll ? scrollTop : messagesEl.scrollHeight;
   bindComposer();
+  $('#delete-group-button').onclick = () => void deleteGroup();
   if (sameGroup && focusedId) {
     const restored = document.getElementById(focusedId);
     if (restored) {
@@ -682,6 +694,30 @@ async function reportResult(taskId) {
     await openGroup(state.activeId);
   } catch (error) {
     toast(error.message, 'bad');
+  }
+}
+
+async function deleteGroup() {
+  if (!state.view || state.sending || deleteGroup.busy) return;
+  const { id, name } = state.view.group;
+  readDraft();
+  deleteGroup.busy = true;
+  try {
+    const answer = await window.relayAsk({
+      title: '删除群组',
+      description: `确定删除「${name}」吗？删除后从群列表移除。历史任务记录保留，正在执行的任务继续运行，可在任务详情查看结果；不会删除客户端会话。`,
+      fields: [], confirmLabel: '删除群组',
+    });
+    if (!answer) return;
+    await api(`/api/groups/${encodeURIComponent(id)}/delete`, { method: 'POST', body: '{}' });
+    try { localStorage.removeItem(`relay.chat.draft.${id}`); } catch {}
+    await loadGroups();
+    toast('群组已删除');
+  } catch (error) {
+    toast(error.message, 'bad');
+  } finally {
+    deleteGroup.busy = false;
+    if ($('#delete-group-button')) $('#delete-group-button').disabled = Boolean(state.sending);
   }
 }
 

@@ -363,6 +363,12 @@ body {
   font-weight: 600;
 }
 
+.group-delete {
+  flex: none;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+}
+
 .conv-head .sub {
   font-size: 11.5px;
   color: var(--muted);

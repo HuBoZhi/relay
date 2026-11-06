@@ -408,6 +408,8 @@ export interface GroupMessage {
 }
 
 export interface Group {
+  /** Logical deletion keeps task evidence and late callbacks intact. */
+  deletedAt?: string;
   id: string;
   topicId: string;
   /** What the user typed when creating it; also the topic display name. */

@@ -73,6 +73,7 @@ export interface EngineEvent {
     | 'task.cancelled'
     | 'client.updated'
     | 'group.created'
+    | 'group.deleted'
     | 'group.joined'
     | 'group.message'
     | 'group.result';
@@ -767,7 +768,7 @@ export class AsyncEngine {
     const groupId = await this.store.mutate((state) => {
       const at = this.stamp();
       const topic = resolveTopic(state, { name }, at);
-      const existing = Object.values(state.groups).find((group) => group.topicId === topic.id);
+      const existing = Object.values(state.groups).find((group) => group.topicId === topic.id && !group.deletedAt);
       if (existing) return { result: existing.id, events: [] };
 
       const group: Group = {
@@ -824,11 +825,26 @@ export class AsyncEngine {
     return view;
   }
 
+  /** Remove the conversation without interrupting work or losing task evidence. */
+  async deleteGroup(groupId: string): Promise<void> {
+    await this.open();
+    const at = this.stamp();
+    const changed = await this.store.mutate((state) => {
+      const group = state.groups[groupId];
+      if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      if (group.deletedAt) return { result: false, events: [] };
+      group.deletedAt = at;
+      return { result: true, events: [{ kind: 'group.deleted', message: groupId }] };
+    });
+    if (changed) this.emit({ type: 'group.deleted', at, groupId, message: '群组已删除' });
+  }
+
   /** Group list for the left rail, newest activity first. */
   async listGroups(): Promise<GroupSummary[]> {
     await this.open();
     const state = this.store.snapshot;
     return Object.values(state.groups)
+      .filter((group) => !group.deletedAt)
       .map((group) => {
         const messages = group.messageIds
           .map((id) => state.groupMessages[id])
@@ -861,7 +877,7 @@ export class AsyncEngine {
     await this.open();
     const state = this.store.snapshot;
     const group = state.groups[groupId];
-    if (!group) return null;
+    if (!group || group.deletedAt) return null;
     return {
       group,
       members: group.memberIds
@@ -897,7 +913,7 @@ export class AsyncEngine {
     if (!sender.agentId) throw new AsyncValidationError([{ field: 'sender.agentId', message: '缺少发送方' }]);
 
     const current = this.store.snapshot.groups[groupId];
-    if (!current) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+    if (!current || current.deletedAt) throw new AsyncNotFoundError(`未找到群：${groupId}`);
 
     const requests = mentions.filter((mention) => mention.client && mention.model && mention.project);
     // A request without a project would let the client pick a folder, and the
@@ -915,7 +931,7 @@ export class AsyncEngine {
     const at = this.stamp();
     const { messageId } = await this.store.mutate((state) => {
       const group = state.groups[groupId];
-      if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      if (!group || group.deletedAt) throw new AsyncNotFoundError(`未找到群：${groupId}`);
       const member = upsertMember(state, groupId, {
         agentId: sender.agentId,
         displayName: sender.displayName,
@@ -1023,7 +1039,7 @@ export class AsyncEngine {
     const at = this.stamp();
     const memberId = await this.store.mutate((state) => {
       const group = state.groups[groupId];
-      if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+      if (!group || group.deletedAt) throw new AsyncNotFoundError(`未找到群：${groupId}`);
       const before = group.memberIds
         .map((id) => state.groupMembers[id])
         .find((member): member is GroupMember => member !== undefined && member.agentId === agentId);
@@ -1079,7 +1095,7 @@ export class AsyncEngine {
     await this.open();
     const state = this.store.snapshot;
     const group = state.groups[groupId];
-    if (!group) throw new AsyncNotFoundError(`未找到群：${groupId}`);
+    if (!group || group.deletedAt) throw new AsyncNotFoundError(`未找到群：${groupId}`);
     const task = state.tasks[input.taskId];
     if (!task) throw new AsyncNotFoundError(`未找到任务：${input.taskId}`);
     if (task.groupId && task.groupId !== groupId) {

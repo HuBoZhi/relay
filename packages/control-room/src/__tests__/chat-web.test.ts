@@ -250,6 +250,45 @@ describe('chat page', () => {
     expect([restored.selectionStart, restored.selectionEnd]).toEqual([2, 4]);
   });
 
+  it('confirms deletion, supports cancellation, and clears the deleted conversation and draft', async () => {
+    let deleted = false;
+    const ui = await setup((call) => {
+      if (call.url === '/api/groups/grp_1/delete') { deleted = true; return { deleted: true }; }
+      if (call.url === '/api/groups' && deleted) return { groups: [] };
+      return route()(call);
+    });
+    ui.window.localStorage.setItem('relay.chat.draft.grp_1', '{"body":"草稿"}');
+    ui.element('#delete-group-button')!.click();
+    expect(ui.text()).toContain('历史任务记录保留');
+    ui.element('[data-ask-action="cancel"]')!.click();
+    await settle();
+    expect(deleted).toBe(false);
+    expect(ui.element('#body-input')).toBeTruthy();
+    ui.element('#delete-group-button')!.click();
+    ui.element('[data-ask-action="confirm"]')!.click();
+    await settle(); await settle();
+    expect(deleted).toBe(true);
+    expect(ui.element('#conv-count')!.textContent).toBe('0');
+    expect(ui.element('#body-input')).toBeNull();
+    expect(ui.window.localStorage.getItem('relay.chat.draft.grp_1')).toBeNull();
+    expect(ui.calls.filter((call) => call.url.endsWith('/delete'))).toHaveLength(1);
+  });
+
+  it('keeps the conversation and draft when deletion fails', async () => {
+    const ui = await setup((call) => call.url.endsWith('/delete')
+      ? { status: 500, body: { error: '保存删除状态失败' } } : route()(call));
+    const input = ui.element('#body-input') as HTMLTextAreaElement;
+    input.value = '保留的草稿';
+    input.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+    ui.element('#delete-group-button')!.click();
+    ui.element('[data-ask-action="confirm"]')!.click();
+    await settle(); await settle();
+    expect(ui.text()).toContain('保存删除状态失败');
+    expect((ui.element('#body-input') as HTMLTextAreaElement).value).toBe('保留的草稿');
+    expect((ui.element('#delete-group-button') as HTMLButtonElement).disabled).toBe(false);
+    expect(ui.element('#conv-count')!.textContent).toBe('1');
+  });
+
   it('does not send while the Chinese input method is composing', async () => {
     const ui = await setup(route());
     const input = ui.element('#body-input') as HTMLTextAreaElement;

@@ -299,6 +299,13 @@ async function route(ctx: Ctx, engine: AsyncEngine): Promise<void> {
   }
 
   const groupMessages = /^\/api\/groups\/([^/]+)\/messages$/.exec(path);
+  const groupDelete = /^\/api\/groups\/([^/]+)\/delete$/.exec(path);
+  if (method === 'POST' && groupDelete) {
+    await readJson(ctx.request);
+    await engine.deleteGroup(decodeURIComponent(groupDelete[1] ?? ''));
+    json(ctx.response, 200, { deleted: true });
+    return;
+  }
   if (method === 'POST' && groupMessages) {
     const body = await readJson(ctx.request);
     const result = await engine.postGroupMessage(

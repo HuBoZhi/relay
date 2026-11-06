@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@agent-relay/control-room`: group chats can be deleted with confirmation; deleted groups stay removed after restart and late callbacks, while task records and running work are preserved.
+
 - `@agent-relay/control-room-desktop`: refresh model and project catalogues when the built-in bridge becomes ready, so opening the window early does not leave empty selectors until reload.
 
 - `@agent-relay/control-room-desktop`: exit waits for owned services and pending settings writes, cancels bridge and client startup, and prevents initialization from reopening a closed app.

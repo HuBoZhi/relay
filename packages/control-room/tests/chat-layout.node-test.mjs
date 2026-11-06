@@ -27,9 +27,12 @@ test('chat keeps the composer in view with long histories and preserves reading 
         args: [`--disk-cache-dir=${join(scratch, 'cache')}`] });
       const page = await browser.newPage();
       let projectReads = 0;
+      let deleted = false;
       await page.route('**/api/**', (route) => {
         const path = new URL(route.request().url()).pathname;
-        const body = path === '/api/groups' ? { groups: [{ id: 'group', name: '长会话', memberCount: 1, messageCount: 80 }] }
+        if (path === '/api/groups/group/delete') deleted = true;
+        const body = path.endsWith('/delete') ? { deleted: true }
+          : path === '/api/groups' ? { groups: deleted ? [] : [{ id: 'group', name: '长会话', memberCount: 1, messageCount: 80 }] }
           : path === '/api/groups/group' ? { group: { id: 'group', name: '长会话' }, members: [], tasks: [],
             messages: Array.from({ length: 80 }, (_, i) => ({ id: String(i), kind: 'message',
               sender: { agentId: 'relay', displayName: 'Relay' }, mentions: [], body: `消息 ${i}\n第二行`, createdAt: new Date().toISOString() })) }
@@ -53,6 +56,15 @@ test('chat keeps the composer in view with long histories and preserves reading 
         await page.locator('#path-select').waitFor();
         assert.match(await page.locator('#path-select').textContent(), /已恢复的项目/);
       }
+      await page.getByRole('button', { name: '删除群组', exact: true }).click();
+      await page.locator('[data-ask-action="cancel"]').click();
+      assert.equal(deleted, false);
+      await page.getByRole('button', { name: '删除群组', exact: true }).click();
+      await page.locator('[data-ask-action="confirm"]').click();
+      await page.waitForFunction(() => document.querySelector('#conv-count').textContent === '0');
+      assert.equal(await page.locator('#body-input').count(), 0);
+      await page.reload();
+      await page.getByText('还没有群。点上面的「新建群」开始。').waitFor();
     } finally {
       await browser?.close();
       await new Promise((done) => server.close(done));
