@@ -138,6 +138,10 @@ export class TurnWatcher {
         continue;
       }
       record.checks = (record.checks ?? 0) + 1;
+      if (result?.sessionId && result.sessionId !== record.sessionId) {
+        record.sessionId = result.sessionId;
+        await this.store.saveSession(record.client, record.workspace, { sessionId: result.sessionId, workspace: record.workspace });
+      }
       const mapped = mapPollResult(result);
       if (mapped.done) {
         await this.#report(record, mapped);

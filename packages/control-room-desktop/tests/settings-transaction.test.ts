@@ -27,6 +27,8 @@ describe('desktop settings transaction', () => {
     expect(save).toHaveBeenLastCalledWith(DEFAULT_SETTINGS);
   });
   it('keeps restart required until runtime matches all connector settings', () => {
+    expect(settingsNeedRestart(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, zcodeTransport: 'mcp' })).toBe(true);
+    expect(settingsNeedRestart(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, zcodeMcpConfig: 'D:/other.json' })).toBe(true);
     expect(settingsNeedRestart(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, connectors: [] })).toBe(true);
     expect(settingsNeedRestart(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, bridgePort: 7909 })).toBe(true);
     expect(settingsNeedRestart(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, notifications: false })).toBe(false);

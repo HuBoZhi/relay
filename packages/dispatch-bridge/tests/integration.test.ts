@@ -22,6 +22,8 @@ import {
 
 import { BridgeStore } from '../src/store.mjs';
 import { createBridgeServer } from '../src/server.mjs';
+import { loadDrivers } from '../src/drivers.mjs';
+import { fileURLToPath } from 'node:url';
 
 const scratch: string[] = [];
 
@@ -84,6 +86,30 @@ async function waitFor(predicate, timeoutMs = 5000) {
 }
 
 describe('group → bridge → client → group', () => {
+  it('accepts an MCP request immediately and later joins its real session and result into the group', async () => {
+    const store = new BridgeStore({ dir: await scratchDir('relay-mcp-e2e-store-') });
+    await store.open();
+    const engine = new AsyncEngine({ dataRoot: await scratchDir('relay-mcp-e2e-engine-') });
+    const server = await startControlRoom({ source: new DemoControlRoomSource({ tickMs: 600000 }), port: 0, async: { engine } });
+    const drivers = await loadDrivers(null, { zcodeMcp: { command: process.execPath,
+      args: [fileURLToPath(new URL('./fixtures/zcode-mcp.mjs', import.meta.url))], cwd: process.env.TEMP } });
+    const bridge = createBridgeServer({ config: { port: 0, host: '127.0.0.1', engineUrl: server.url, pollMs: 30, timeoutMs: 5000 }, drivers, store });
+    try {
+      const { url } = await bridge.listen();
+      engine.registerAdapter(new HttpBridgeAdapter({ client: 'zcode', baseUrl: url }));
+      const sender = { agentId: 'relay', displayName: 'Relay', app: 'relay', device: 'local', chatId: 'chat_relay_main' };
+      const { group } = await engine.createGroup({ name: 'MCP 连接验收', creator: sender });
+      const request = await engine.postGroupMessage(group.id, { sender, body: '验证 MCP 异步回传', mentions: [{ target: 'zcode', client: 'zcode',
+        project: { id: '', path: 'D:/McpTest' }, model: { account: 'BigModel', modelId: 'GLM-5.3', reasoning: 'high' } }] });
+      expect(request.receipt?.phase).toBe('accepted');
+      expect(request.receipt?.sessionId).toBeNull();
+      expect(request.message.state).toBe('accepted');
+      expect(await waitFor(async () => Boolean((await engine.group(group.id))?.messages.some((m) => m.kind === 'result')))).toBe(true);
+      const view = await engine.group(group.id);
+      expect(view?.messages.find((m) => m.kind === 'result')).toMatchObject({ state: 'delivered', outcome: 'completed', body: '本轮完成' });
+      expect(view?.members.find((m) => m.agentId === 'zcode')?.sessionId).toBe('sess_mcp_real');
+    } finally { await bridge.close(); await server.close(); await engine.close(); }
+  });
   it('dispatches an @ request and lands the result back in the conversation', async () => {
     const client = fakeClient();
     const store = new BridgeStore({ dir: await scratchDir('relay-bridge-e2e-store-') });
@@ -151,9 +177,8 @@ describe('group → bridge → client → group', () => {
     const result = view?.messages.find((message) => message.kind === 'result');
     expect(result?.outcome).toBe('completed');
     expect(result?.body).toContain('npm test 通过');
-    // The origin chat is `codex`; this install has no codex delivery channel, so the
-    // reply is a manual item rather than a claimed delivery.
-    expect(result?.state).toBe('manual');
+    // This request belongs to the Relay group, so the persisted group result is delivery.
+    expect(result?.state).toBe('delivered');
     expect(view?.members.find((member) => member.agentId === 'zcode')?.sessionId).toBe(
       'session_zcode_real_1'
     );

@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@agent-relay/dispatch-bridge` and the desktop app: connect ZCode through a configurable `zcode-mcp` stdio server, with asynchronous acceptance receipts, real session ids on callback, model discovery and session continuation without a desktop debugging port.
+
 - `@agent-relay/control-room-desktop`: remember window position, size, maximization and zoom, and keep the window reachable when a display is removed or resized.
 
 - `@agent-relay/control-room-desktop`: choose the task data directory with a native folder picker, open data and logs from settings, and restart the app to apply pending preferences.

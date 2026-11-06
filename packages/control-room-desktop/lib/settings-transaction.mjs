@@ -1,7 +1,7 @@
 import { mergeSettings } from './settings.mjs';
 
 export function settingsNeedRestart(active, next) {
-  return ['dataRoot', 'connectors', 'bridgePort', 'bridges'].some(
+  return ['dataRoot', 'connectors', 'bridgePort', 'bridges', 'zcodeTransport', 'zcodeMcpConfig'].some(
     (key) => JSON.stringify(active[key]) !== JSON.stringify(next[key])
   );
 }

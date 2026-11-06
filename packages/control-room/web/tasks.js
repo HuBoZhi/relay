@@ -655,6 +655,16 @@ function renderDesktopSettings() {
         ${window.relayDesktop?.chooseDataDirectory ? '<button type="button" id="choose-data-directory">选择文件夹…</button>' : ''}
         <span class="hint-text">当前生效：<span class="mono">${esc(state.desktop.effectiveDataRoot || '未知')}</span> · 修改后下次启动生效</span>
       </div>
+      <div class="field">
+        <label for="f-zcode-transport">ZCode 连接方式</label>
+        <select id="f-zcode-transport" name="zcodeTransport">
+          <option value="desktop"${settings.zcodeTransport !== 'mcp' ? ' selected' : ''}>桌面连接</option>
+          <option value="mcp"${settings.zcodeTransport === 'mcp' ? ' selected' : ''}>zcode-mcp（MCP）</option>
+        </select>
+        <label for="f-zcode-mcp">MCP 配置文件</label>
+        <input id="f-zcode-mcp" name="zcodeMcpConfig" value="${esc(settings.zcodeMcpConfig || '')}" placeholder="D:/Programs/AgentRelay/zcode-mcp/relay-config.json" />
+        <span class="hint-text">MCP 方式无需开启桌面调试端口；修改后重新启动应用生效。</span>
+      </div>
       <div class="form-actions">
         <button class="button-primary" type="submit">保存设置</button>
         <button type="button" data-desktop-action="open-data-folder">打开数据文件夹</button>
@@ -934,7 +944,7 @@ function stageFields(stage, index) {
 function renderReceipt(receipt) {
   return `<div class="receipt" data-phase="${esc(receipt.phase)}">
     <div class="card-head" style="margin:0">
-      <h2>${receipt.phase === 'delivered' ? '已送达目标会话' : '已排队 · 仅本地保存'}</h2>
+      <h2>${receipt.phase === 'delivered' ? '已送达目标会话' : receipt.phase === 'accepted' ? 'MCP 已受理 · 等待会话确认' : '已排队 · 仅本地保存'}</h2>
       <span class="hint">${esc(receipt.reason || '目标客户端已受理提示词')}</span>
     </div>
     <dl>
@@ -1053,7 +1063,7 @@ async function submitTask(form) {
     });
     state.receipt = receipt;
     state.draft = null;
-    toast(receipt.phase === 'delivered' ? '已送达目标会话' : '已排队，等待派发');
+    toast(receipt.phase === 'delivered' ? '已送达目标会话' : receipt.phase === 'accepted' ? 'MCP 已受理，结果将自动回传' : '已排队，等待派发');
     await loadSummary();
     render();
   } catch (error) {
@@ -1125,6 +1135,7 @@ function wire(root) {
       state.settingsDraft = {
         closeToTray: data.get('closeToTray') === 'on', notifications: data.get('notifications') === 'on',
         loginAtStartup: data.get('loginAtStartup') === 'on', dataRoot: String(data.get('dataRoot') || ''),
+        zcodeTransport: String(data.get('zcodeTransport') || 'desktop'), zcodeMcpConfig: String(data.get('zcodeMcpConfig') || ''),
       };
       $('#settings-note').textContent = '有未保存的更改';
     };
@@ -1141,6 +1152,8 @@ function wire(root) {
           notifications: data.get('notifications') === 'on',
           loginAtStartup: data.get('loginAtStartup') === 'on',
           dataRoot: String(data.get('dataRoot') || ''),
+          zcodeTransport: String(data.get('zcodeTransport') || 'desktop'),
+          zcodeMcpConfig: String(data.get('zcodeMcpConfig') || ''),
         });
         state.desktop = result;
         state.settingsDraft = null;

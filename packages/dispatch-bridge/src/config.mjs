@@ -11,8 +11,8 @@
  *   the system drive.
  */
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 
 export const DEFAULT_PORT = 7900;
 
@@ -56,6 +56,7 @@ export function resolveBridgeConfig({ argv = process.argv.slice(2), env = proces
     pollMs: Number(env.RELAY_BRIDGE_POLL_MS || 2000),
     timeoutMs: Number(env.RELAY_BRIDGE_TIMEOUT_MS || 60 * 60 * 1000),
     help: false,
+    zcodeMcpConfig: env.RELAY_ZCODE_MCP_CONFIG?.trim() || null,
   };
 
   const next = (index, flag) => {
@@ -85,6 +86,10 @@ export function resolveBridgeConfig({ argv = process.argv.slice(2), env = proces
         break;
       case '--data':
         config.dataDir = next(index, flag);
+        index += 1;
+        break;
+      case '--zcode-mcp-config':
+        config.zcodeMcpConfig = next(index, flag);
         index += 1;
         break;
       case '--poll-ms':
@@ -123,6 +128,15 @@ export function resolveBridgeConfig({ argv = process.argv.slice(2), env = proces
   config.engineUrl = config.engineUrl.replace(/\/+$/, '');
   config.dataDir = resolve(config.dataDir);
   config.desktopNativeDir = firstExisting([config.desktopNativeDir]) ?? null;
+  if (config.zcodeMcpConfig) {
+    const file = resolve(config.zcodeMcpConfig);
+    const mcp = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    if (typeof mcp.command !== 'string' || !mcp.command.trim() || !Array.isArray(mcp.args) || mcp.args.some((arg) => typeof arg !== 'string')) {
+      throw new Error('ZCode MCP 配置必须包含 command 和字符串数组 args');
+    }
+    if (mcp.mode && !['plan', 'build', 'edit', 'yolo', 'guarded', 'auto'].includes(mcp.mode)) throw new Error('ZCode MCP mode 不受支持');
+    config.zcodeMcp = { ...mcp, cwd: resolve(dirname(file), mcp.cwd || '.') };
+  }
   return config;
 }
 
@@ -146,6 +160,7 @@ export const USAGE = `用法：relay-dispatch-bridge [选项]
   --engine <地址>            任务引擎地址，默认 http://127.0.0.1:4320
   --engine-token <令牌>      引擎写接口令牌（引擎设置了 X-Relay-Async-Token 时需要）
   --desktop-native <目录>    客户端适配器目录，默认取已安装的 desktop-native
+  --zcode-mcp-config <文件>   使用指定 stdio MCP 配置连接 ZCode（替代桌面调试端口）
   --data <目录>              会话与在途记录目录，必须在非系统盘
   --poll-ms <毫秒>           原生轮次检查间隔，默认 2000
   --timeout-ms <毫秒>        单轮等待上限，默认 3600000

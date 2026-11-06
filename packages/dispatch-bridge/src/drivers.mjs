@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import WebSocketClient from 'ws';
 
 import { PORTS, SUPPORTED_CLIENTS } from './config.mjs';
+import { ZCodeMcpConnection, ZCodeMcpDesktop } from './zcode-mcp.mjs';
 
 /** Read-only interface checks, evaluated in the app's own renderer. */
 const INTERFACE_PROBES = {
@@ -39,7 +40,20 @@ const INTERFACE_PROBES = {
  * A missing directory is not fatal: the bridge still starts, reports why it cannot
  * dispatch, and can be pointed at an install later without a code change.
  */
-export async function loadDrivers(dir, { log = () => {} } = {}) {
+export async function loadDrivers(dir, { log = () => {}, zcodeMcp = null } = {}) {
+  const drivers = await loadDesktopDrivers(dir, { log });
+  if (!zcodeMcp) return drivers;
+  const connection = new ZCodeMcpConnection(zcodeMcp);
+  return { ...drivers, available: true, reason: null, zcodeMcp: connection,
+    classes: { ...drivers.classes, zcode: ZCodeMcpDesktop },
+    connect: async (options) => {
+      if (options.client === 'zcode') { await connection.connect(); return connection; }
+      if (!drivers.available) throw new Error(drivers.reason);
+      return drivers.connect(options);
+    }, close: () => connection.close() };
+}
+
+async function loadDesktopDrivers(dir, { log = () => {} } = {}) {
   if (!dir) {
     return {
       available: false,
@@ -107,6 +121,7 @@ export function driverFor(drivers, client) {
  * enumerate their projects say so rather than returning a made-up list.
  */
 export async function listProjectsFor({ drivers, client, timeoutMs = 20_000 }) {
+  if (client === 'zcode' && drivers.zcodeMcp) throw new Error('zcode-mcp 未提供项目枚举工具，请直接填写项目目录');
   if (!SUPPORTED_CLIENTS.includes(client)) throw new Error(`不支持的客户端：${client}`);
   if (!drivers.available) throw new Error(drivers.reason);
   const Driver = driverFor(drivers, client);
@@ -168,6 +183,10 @@ export function sameWorkspace(a, b) {
  * than a hopeful "supported".
  */
 export async function probeClient({ drivers, client, timeoutMs = 5000 }) {
+  if (client === 'zcode' && drivers.zcodeMcp) {
+    try { return await drivers.zcodeMcp.probe(); }
+    catch (error) { return { client, ok: false, interfaceReady: 'unverified', version: 'zcode-mcp', notes: [], error: error.message }; }
+  }
   const port = PORTS[client];
   if (!port) {
     return {

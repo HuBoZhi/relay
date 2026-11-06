@@ -6,7 +6,7 @@
  * credentials do not.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile, utimes } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -110,6 +110,9 @@ describe('client model catalogues', () => {
         { id: 'balanced-model', name: '均衡' },
       ],
     });
+    // Do not rely on filesystem timestamp precision for two adjacent writes.
+    await utimes(join(root, '.workbuddy/cache/acc-product-config-v3-1.json'), 1000, 1000);
+    await utimes(join(root, '.workbuddy/cache/acc-product-config-v3-2.json'), 2000, 2000);
     const result = await listModelsFor('workbuddy', { home: root });
     const ids = result.models.map((model) => model.id);
     expect(ids).toContain('fast-model');

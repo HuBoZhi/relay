@@ -46,6 +46,7 @@ const REASONING_LEVELS = ['low', 'medium', 'high', 'max'];
 const SEND_STATE = {
   sent: ['已发出', 'info'],
   queued: ['已排队', 'warn'],
+  accepted: ['MCP 已受理 · 等待会话确认', 'info'],
   delivered: ['已送达目标会话', 'ok'],
   failed: ['派发失败', 'bad'],
   manual: ['需人工处理', 'bad'],

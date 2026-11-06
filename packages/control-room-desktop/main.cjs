@@ -656,6 +656,7 @@ async function startBridges() {
       dataDir: resolve(engine.dataRoot, '..', 'bridge'),
       desktopNativeDir: settings.desktopNativeDir || 'D:/Programs/AgentRelay/desktop-native',
       preferredPort: settings.bridgePort || 7901,
+      zcodeMcpConfig: settings.zcodeTransport === 'mcp' ? settings.zcodeMcpConfig : null,
       signal: lifecycleAbort.signal,
       log: (line) => console.log(line),
     });
@@ -732,7 +733,7 @@ async function start() {
   if (win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');
   const { startSystemClients } = await import('./lib/system-startup.mjs');
   if (!config.smoke) {
-    const bootstrap = startSystemClients(config, { consoleDir: dirname(process.execPath) });
+    const bootstrap = startSystemClients(config, { consoleDir: dirname(process.execPath), zcodeTransport: settings.zcodeTransport });
     clientBootstrap = bootstrap;
     bootstrap?.once('exit', () => {
       if (!quitting && win && !win.isDestroyed()) win.webContents.send('desktop:connections-ready');

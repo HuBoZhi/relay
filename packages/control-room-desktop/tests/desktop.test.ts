@@ -280,6 +280,15 @@ describe('buildAppMenu', () => {
 });
 
 describe('desktop settings', () => {
+  it('persists the MCP transport and rejects a missing or relative config', async () => {
+    const path = await settingsFile();
+    const merged = mergeSettings(DEFAULT_SETTINGS, { zcodeTransport: 'mcp', zcodeMcpConfig: 'D:/Mcp/relay.json' });
+    await saveSettings(path, merged);
+    expect(await loadSettings(path)).toMatchObject({ zcodeTransport: 'mcp', zcodeMcpConfig: 'D:/Mcp/relay.json' });
+    for (const zcodeMcpConfig of ['', 'relative.json']) {
+      expect(() => mergeSettings(DEFAULT_SETTINGS, { zcodeTransport: 'mcp', zcodeMcpConfig })).toThrow('完整路径');
+    }
+  });
   it('defaults to quitting on window close and enabling notifications', () => {
     expect(DEFAULT_SETTINGS.closeToTray).toBe(false);
     expect(DEFAULT_SETTINGS.notifications).toBe(true);

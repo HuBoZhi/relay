@@ -34,7 +34,7 @@ export async function main(argv = process.argv.slice(2)) {
   const store = new BridgeStore({ dir: config.dataDir, log });
   await store.open();
 
-  const drivers = await loadDrivers(config.desktopNativeDir, { log });
+  const drivers = await loadDrivers(config.desktopNativeDir, { log, zcodeMcp: config.zcodeMcp });
   const bridge = await startBridge({ config, drivers, store, log });
 
   console.log('');

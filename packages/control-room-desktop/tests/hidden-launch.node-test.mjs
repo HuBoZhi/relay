@@ -15,12 +15,12 @@ test('native app bootstraps clients hidden without holding up the window',
     try {
       const launcher = join(root, 'start.ps1');
       const result = join(root, 'ready.json');
-      await writeFile(launcher, `param($RuntimeRoot,$ConsoleDir,[switch]$Background,[switch]$ClientsOnly)
+      await writeFile(launcher, `param($RuntimeRoot,$ConsoleDir,[switch]$Background,[switch]$ClientsOnly,[switch]$SkipZCode)
 Start-Sleep -Milliseconds 300
-@{root=$RuntimeRoot;console=$ConsoleDir;background=[bool]$Background;clientsOnly=[bool]$ClientsOnly} | ConvertTo-Json | Set-Content -LiteralPath '${result.replaceAll("'", "''")}' -Encoding UTF8
+@{root=$RuntimeRoot;console=$ConsoleDir;background=[bool]$Background;clientsOnly=[bool]$ClientsOnly;skipZCode=[bool]$SkipZCode} | ConvertTo-Json | Set-Content -LiteralPath '${result.replaceAll("'", "''")}' -Encoding UTF8
 `);
       startSystemClients({ systemLauncher: launcher, workspaceStateFile: join(root, 'data', 'workspace.json') },
-        { consoleDir: root, log() {} });
+        { consoleDir: root, zcodeTransport: 'mcp', log() {} });
       // The GUI must regain control before the bootstrap process has finished.
       await assert.rejects(readFile(result), { code: 'ENOENT' });
       let data;
@@ -28,7 +28,7 @@ Start-Sleep -Milliseconds 300
         try { data = JSON.parse((await readFile(result, 'utf8')).replace(/^\uFEFF/, '')); break; }
         catch { await delay(50); }
       }
-      assert.deepEqual(data, { root, console: root, background: true, clientsOnly: true });
+      assert.deepEqual(data, { root, console: root, background: true, clientsOnly: true, skipZCode: true });
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

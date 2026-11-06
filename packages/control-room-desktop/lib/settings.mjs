@@ -30,6 +30,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   connectors: ['zcode', 'workbuddy'],
   /** Port the built-in bridge prefers; it moves on if the port is taken. */
   bridgePort: 7901,
+  zcodeTransport: 'desktop',
+  zcodeMcpConfig: 'D:/Programs/AgentRelay/zcode-mcp/relay-config.json',
   /** Extra bridges the user runs themselves: `{ client, url }`, loopback only. */
   bridges: [],
 });
@@ -66,6 +68,8 @@ export function normalizeSettings(raw) {
     connectors,
     bridgePort: Number.isInteger(bridgePort) && bridgePort >= 1024 && bridgePort <= 65535 ? bridgePort : 7901,
     bridges,
+    zcodeTransport: source.zcodeTransport === 'mcp' ? 'mcp' : 'desktop',
+    zcodeMcpConfig: typeof source.zcodeMcpConfig === 'string' && source.zcodeMcpConfig.trim() ? source.zcodeMcpConfig.trim() : DEFAULT_SETTINGS.zcodeMcpConfig,
   };
 }
 
@@ -111,6 +115,8 @@ export function mergeSettings(current, patch) {
     next.dataRoot = typeof value === 'string' && value.trim() ? resolve(value.trim()) : null;
   }
   if ('closeToTray' in patch) next.closeToTray = patch.closeToTray === true;
+  if ('zcodeTransport' in patch) next.zcodeTransport = patch.zcodeTransport === 'mcp' ? 'mcp' : 'desktop';
+  if ('zcodeMcpConfig' in patch && typeof patch.zcodeMcpConfig === 'string') next.zcodeMcpConfig = patch.zcodeMcpConfig.trim();
   if ('notifications' in patch) next.notifications = patch.notifications !== false;
   if ('loginAtStartup' in patch) next.loginAtStartup = patch.loginAtStartup === true;
   if ('connectors' in patch && Array.isArray(patch.connectors)) {
@@ -122,6 +128,9 @@ export function mergeSettings(current, patch) {
   }
   if ('bridges' in patch && Array.isArray(patch.bridges)) {
     next.bridges = normalizeSettings({ bridges: patch.bridges }).bridges;
+  }
+  if (next.zcodeTransport === 'mcp' && (!next.zcodeMcpConfig || !isAbsolute(next.zcodeMcpConfig))) {
+    throw new Error('请选择 ZCode MCP 配置文件的完整路径。');
   }
   return next;
 }

@@ -45,7 +45,7 @@ export interface DispatchRequest {
 
 export interface DispatchOutcome {
   /** `delivered` = the target accepted the prompt. `queued` = not sent yet. */
-  status: 'delivered' | 'queued' | 'failed';
+  status: 'delivered' | 'accepted' | 'queued' | 'failed';
   sessionId?: string | null;
   projectId?: string | null;
   modelId?: string | null;
@@ -511,7 +511,7 @@ function stringOrNull(value: unknown): string | null {
 }
 
 function normalizeDispatchStatus(value: unknown): DispatchOutcome['status'] {
-  return value === 'delivered' || value === 'failed' ? value : 'queued';
+  return value === 'delivered' || value === 'accepted' || value === 'failed' ? value : 'queued';
 }
 
 function normalizeDeliverState(value: unknown): DeliverOutcome['state'] {

@@ -565,8 +565,8 @@ export class AsyncEngine {
       const currentTask = state.tasks[taskId];
       if (!currentRun || !currentStage || !currentTask) return { result: receipt, events: [] };
 
-      if (outcome.status === 'delivered') {
-        currentRun.status.transport = { state: 'target-received', at, source: 'adapter.dispatch' };
+      if (outcome.status === 'delivered' || outcome.status === 'accepted') {
+        currentRun.status.transport = { state: outcome.status === 'delivered' ? 'target-received' : 'relay-received', at, source: 'adapter.dispatch' };
         currentRun.status.execution = { state: 'accepted', at, source: 'adapter.dispatch' };
         currentRun.acceptedAt = at;
         currentRun.lastEventAt = at;
@@ -599,7 +599,7 @@ export class AsyncEngine {
           sender: { app: 'relay', device: 'local', chatId: 'async-engine', agentId: 'engine' },
           route: 'to-client',
           kind: 'stage.accepted',
-          summary: `已送达「${currentStage.label}」：${currentStage.client}`,
+          summary: outcome.status === 'accepted' ? `连接通道已受理「${currentStage.label}」，等待目标会话确认` : `已送达「${currentStage.label}」：${currentStage.client}`,
           at,
         });
         currentTask.runIds = unique([...currentTask.runIds, run.id]);
@@ -662,7 +662,7 @@ export class AsyncEngine {
         currentTask.updatedAt = at;
       }
 
-      const phase: SubmitReceipt['phase'] = outcome.status === 'delivered' ? 'delivered' : 'queued';
+      const phase: SubmitReceipt['phase'] = outcome.status === 'delivered' || outcome.status === 'accepted' ? outcome.status : 'queued';
       const nextReceipt: SubmitReceipt = {
         ...receipt,
         phase,
@@ -1153,7 +1153,7 @@ export class AsyncEngine {
       message.taskId = receipt.taskId;
       message.stageId = receipt.stageId;
       message.runId = receipt.runId;
-      message.state = receipt.phase === 'delivered' ? 'delivered' : 'queued';
+      message.state = receipt.phase;
       message.reason = receipt.reason;
       if (group && !group.taskIds.includes(receipt.taskId)) group.taskIds.push(receipt.taskId);
       // A delivered request that reported a session is a member that has joined.
@@ -1285,6 +1285,10 @@ export class AsyncEngine {
       };
       state.callbacks[callbackId] = callback;
       state.callbackKeys[dedupeKey] = callbackId;
+      if (!duplicate && callback.evidence.sessionId) {
+        run.actual.sessionId = callback.evidence.sessionId;
+        stage.session = { ...stage.session, sessionId: callback.evidence.sessionId };
+      }
 
       applyCallbackToRun(run, stage, input.outcome, at);
       if (!duplicate) {

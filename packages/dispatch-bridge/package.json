@@ -12,6 +12,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "ws": "^8.21.0"
   },
   "scripts": {

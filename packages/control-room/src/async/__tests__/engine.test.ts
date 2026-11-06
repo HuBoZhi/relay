@@ -110,6 +110,21 @@ function submitInput(overrides: Partial<SubmitTaskInput> = {}): SubmitTaskInput 
 }
 
 describe('submit', () => {
+  it('distinguishes MCP acceptance from target delivery and records the real session from a callback', async () => {
+    const adapter = new FakeAdapter();
+    adapter.dispatchOutcome = { status: 'accepted', sessionId: null, reason: 'MCP 已受理' };
+    const engine = new AsyncEngine({ adapters: [adapter], dataRoot: await scratchRoot() });
+    try {
+      const receipt = await engine.submit(submitInput());
+      expect(receipt.phase).toBe('accepted');
+      expect(receipt.sessionId).toBeNull();
+      expect(receipt.status.transport.state).toBe('relay-received');
+      expect(receipt.status.execution.state).toBe('accepted');
+      await engine.recordCallback({ taskId: receipt.taskId, stageId: receipt.stageId, runId: receipt.runId,
+        outcome: 'completed', summary: '完成', evidence: { sessionId: 'sess_real_mcp' }, idempotencyKey: 'mcp-callback' });
+      expect((await engine.task(receipt.taskId)).runs[0].actual.sessionId).toBe('sess_real_mcp');
+    } finally { await engine.close(); }
+  });
   it('returns a queued receipt without an adapter and never claims delivery', async () => {
     const engine = new AsyncEngine({ dataRoot: await scratchRoot() });
     const receipt = await engine.submit(submitInput());

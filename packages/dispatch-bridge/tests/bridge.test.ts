@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveBridgeConfig } from '../src/config.mjs';
 import { loadDrivers } from '../src/drivers.mjs';
@@ -293,6 +293,9 @@ describe('dispatch', () => {
 
 describe('probe', () => {
   it('answers a single-client probe at the top level, as the engine expects', async () => {
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (url, init) => String(url) === 'http://127.0.0.1:19372/json/version'
+      ? Promise.resolve(new Response(JSON.stringify({ Browser: 'ZCode fixture' }))) : realFetch(url, init));
     const harness = await startHarness({ polls: [() => ({ status: 'running', response: '' })] });
     try {
       const single = await post(`${harness.url}/probe`, { client: 'zcode' });
@@ -306,6 +309,7 @@ describe('probe', () => {
       const all = await post(`${harness.url}/probe`, {});
       expect(all.body.probes).toHaveLength(3);
     } finally {
+      vi.unstubAllGlobals();
       await harness.bridge.close();
       harness.engine.server.close();
     }
@@ -363,6 +367,15 @@ describe('bridge state', () => {
 });
 
 describe('config', () => {
+  it('loads a stdio MCP configuration and resolves its working directory', async () => {
+    const root = await scratchDir('relay-mcp-config-');
+    const file = join(root, 'mcp.json');
+    await writeFile(file, '\uFEFF' + JSON.stringify({ command: process.execPath, args: ['mcp.js'], cwd: 'worker', mode: 'build' }));
+    const config = resolveBridgeConfig({ argv: ['--zcode-mcp-config', file], env: {} });
+    expect(config.zcodeMcp).toMatchObject({ command: process.execPath, cwd: join(root, 'worker'), mode: 'build' });
+    await writeFile(file, JSON.stringify({ command: 'node', args: [], mode: 'invalid' }));
+    expect(() => resolveBridgeConfig({ argv: ['--zcode-mcp-config', file], env: {} })).toThrow('mode');
+  });
   it('refuses a remote engine and a data directory on the system drive', () => {
     expect(() => resolveBridgeConfig({ argv: ['--engine', 'http://10.0.0.9:4320'], env: {} })).toThrow(
       '回环地址'

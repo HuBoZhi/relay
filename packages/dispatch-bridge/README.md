@@ -70,6 +70,44 @@ node packages/control-room/dist/cli.js --tasks --bridge zcode=http://127.0.0.1:7
 
 ## 接口
 
+### ZCode MCP 连接
+
+桌面程序「设置与数据 → ZCode 连接方式」可选择 `zcode-mcp（MCP）` 并指定配置文件。
+CLI 使用 `--zcode-mcp-config D:/Programs/AgentRelay/zcode-mcp/relay-config.json`。
+未配置时仍使用现有桌面连接；MCP 失败不会自动改道或重复发送任务。
+
+配置为普通 stdio MCP 启动配置，例如：
+
+```json
+{
+  "command": "C:/Program Files/nodejs/node.exe",
+  "args": ["D:/Programs/AgentRelay/zcode-mcp/dist/index.js"],
+  "cwd": "D:/Programs/AgentRelay/zcode-mcp",
+  "mode": "build",
+  "env": {
+    "ZCODE_BIN": "C:/Program Files/ZCode/resources/glm/zcode.cjs",
+    "ZCODE_MCP_STATE_DIR": "D:/Programs/AgentRelay/zcode-mcp/runtime",
+    "ZCODE_DATA_BASE_DIR": "D:/Programs/AgentRelay/zcode-mcp/runtime",
+    "ZCODE_STORAGE_DIR": "D:/Programs/AgentRelay/zcode-mcp/runtime/storage",
+    "ZCODE_LOG_DIR": "D:/Programs/AgentRelay/zcode-mcp/runtime/logs"
+  }
+}
+```
+
+使用 [TechYan/zcode_mcp](https://github.com/TechYan/zcode_mcp) 0.2.0。
+Windows 部署需先运行 `node packages/dispatch-bridge/scripts/patch-zcode-mcp-windows.mjs <上游源码目录>`，
+再在该目录运行 `npm ci --ignore-scripts` 与 `npm run build`。补丁处理 Windows 绝对路径、隐藏子进程、
+无符号链接启动、隔离目录、会话续接及当前 Worker 的 Provider revision；上游源码与 MIT 许可保留在安装目录。
+`ZCODE_PROVIDER` 可指定本机已登录的套餐，`ZCODE_BUILTIN_PROVIDER_CONFIG_FILE` 可指向现有提供方配置（只读）。
+不复制模型密钥、不更改用户 ZCode 配置；临时、状态和缓存使用非 C 盘目录。
+
+`mode` 默认 `build`，也可设 `plan` 等上游支持的模式。权限确认被无头服务拒绝时会回报阻塞，
+不会自动升级为 `yolo`。`zcode_check` 会创建探测会话；上游未提供项目枚举工具，项目目录需手填。
+
+`zcode_run` 在整轮结束后才返回真实会话编号，初始回执因此为 `accepted`（MCP 已受理），
+不是 `delivered`。桥接独立跟踪结果，返回后登记真实会话并自动回传到原群聊。
+断线和超时保留为未确认，不冒充完成，不自动重发。`zcode_sessions` 所列的 `sess_...` 可用于继续会话。
+
 | 接口             | 说明                                              |
 | ---------------- | ------------------------------------------------- |
 | `GET /health`    | 适配器状态、各客户端端口、在途记录                |
@@ -96,18 +134,18 @@ node packages/control-room/dist/cli.js --tasks --bridge zcode=http://127.0.0.1:7
 ## 安全与限制
 
 - 只监听回环地址；`POST` 要求 JSON 且拒绝跨站来源。
-- 只用客户端 Runtime 级接口：不模拟键鼠、不操作 DOM、不读取模型凭据、不启动独立 CLI。
+- 桌面方式只用客户端 Runtime 级接口；MCP 方式通过 stdio 服务启动独立的 ZCode app-server。桥接不模拟键鼠、不操作 DOM、不读取模型凭据。
 - 客户端调试端口需要客户端以 `--remote-debugging-port` 启动；重启客户端需用户授权。
 - Factory 适配器的工作区在其自身代码里固定；桥接遇到其他项目会如实返回失败原因，不改道。
 - 「原聊天主动注入」未验证：`/deliver` 一律返回 `manual`，界面显示「需人工处理」。
 
-## 探测（不改动任何状态）
+## 探测
 
 ```bash
 curl -X POST http://127.0.0.1:7901/probe -H "Content-Type: application/json" -d '{"client":"workbuddy"}'
 ```
 
-返回 `{ ok, interfaceReady, version, notes, error }`。只读：不创建会话、不发提示词。
+返回 `{ ok, interfaceReady, version, notes, error }`。桌面方式只读；ZCode MCP 的 `zcode_check` 会创建探测会话，不发送模型提示词。
 
 ## 测试
 

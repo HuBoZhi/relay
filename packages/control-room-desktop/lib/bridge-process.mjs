@@ -42,6 +42,7 @@ export async function startManagedBridge({
   engineUrl,
   dataDir,
   desktopNativeDir,
+  zcodeMcpConfig,
   preferredPort = 7901,
   env = process.env,
   log = () => {},
@@ -64,6 +65,7 @@ export async function startManagedBridge({
         '--data',
         dataDir,
         ...(desktopNativeDir ? ['--desktop-native', desktopNativeDir] : []),
+        ...(zcodeMcpConfig ? ['--zcode-mcp-config', zcodeMcpConfig] : []),
       ],
       {
         env: { ...env, ELECTRON_RUN_AS_NODE: '1' },

@@ -109,20 +109,24 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     if (!Driver) throw new HttpError(400, `不支持的客户端：${client}`);
 
     const existing = live.get(client);
-    if (existing && !sameWorkspace(existing.workspace, workspace)) {
+    if (existing && !(client === 'zcode' && drivers.zcodeMcp) && !sameWorkspace(existing.workspace, workspace)) {
       // A client has one active session in this bridge. Switching projects under a
       // live run is how a session lands in the wrong folder.
       throw new HttpError(409, `该客户端当前绑定项目 ${existing.workspace}，与请求的 ${workspace} 不一致`);
     }
 
-    if (existing && (!continueSessionId || existing.sessionId === continueSessionId)) {
+    if (existing && !(client === 'zcode' && drivers.zcodeMcp) && (!continueSessionId || existing.sessionId === continueSessionId)) {
       return existing;
     }
 
     const transport = existing?.transport ?? (await drivers.connect({ client, port: PORTS[client] }));
     const desktop = new Driver(transport, continueSessionId, {
       workspace,
-      model: modelOptionsFor(client, model),
+      model: client === 'zcode' && drivers.zcodeMcp ? {
+        modelId: model?.modelId,
+        ...(model?.provider?.startsWith('account:') ? { providerId: model.provider } : {}),
+        options: { reasoningLevel: model?.reasoning },
+      } : modelOptionsFor(client, model),
     });
     const entry = { transport, desktop, workspace, sessionId: continueSessionId ?? null };
     live.set(client, entry);
@@ -178,7 +182,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
         const created = await entry.desktop.createSession();
         entry.sessionId = created.sessionId;
         record.sessionId = created.sessionId;
-        await store.saveSession(client, workspace, {
+        if (created.sessionId) await store.saveSession(client, workspace, {
           sessionId: created.sessionId,
           workspace,
           model: request.model ?? null,
@@ -203,7 +207,8 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     });
 
     return {
-      status: 'delivered',
+      status: entry.desktop.acceptanceStatus || 'delivered',
+      reason: entry.desktop.acceptanceStatus === 'accepted' ? 'MCP 请求已受理，真实会话编号将在本轮返回后登记' : undefined,
       sessionId: record.sessionId,
       projectId: request.project.id || entry.desktop.projectId || null,
       workspacePath: workspace,
@@ -227,7 +232,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
         clients: Object.fromEntries(
           SUPPORTED_CLIENTS.map((client) => [
             client,
-            { port: PORTS[client], active: Boolean(live.get(client)) },
+            { port: client === 'zcode' && drivers.zcodeMcp ? null : PORTS[client], transport: client === 'zcode' && drivers.zcodeMcp ? 'mcp' : 'desktop', active: Boolean(live.get(client)) },
           ])
         ),
         pending: store.pending().map((record) => ({
@@ -262,7 +267,7 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     if (method === 'GET' && url.pathname === '/models') {
       const client = String(url.searchParams.get('client') || '').trim();
       try {
-        json(response, 200, await listModelsFor(client));
+        json(response, 200, client === 'zcode' && drivers.zcodeMcp ? { client, models: await drivers.zcodeMcp.listModels(), reason: null } : await listModelsFor(client));
       } catch (error) {
         // Same contract as /projects: the form keeps a typed field when the
         // machine has no readable catalogue for this client.
@@ -338,7 +343,8 @@ export function createBridgeServer({ config, drivers, store, log = () => {} }) {
     },
     async close() {
       watcher.stop();
-      for (const entry of live.values()) entry.transport?.close?.();
+      await Promise.allSettled([...live.values()].map((entry) => entry.transport?.close?.()));
+      await drivers.close?.();
       live.clear();
       await new Promise((resolve) => server.close(() => resolve()));
     },

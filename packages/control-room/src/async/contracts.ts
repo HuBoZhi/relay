@@ -387,7 +387,7 @@ export interface GroupMention {
 export type GroupMessageKind = 'text' | 'request' | 'result' | 'join' | 'system';
 
 /** How far a message's delivery got. Never a stand-in for "the work is done". */
-export type GroupMessageState = 'sent' | 'queued' | 'delivered' | 'manual' | 'failed';
+export type GroupMessageState = 'sent' | 'queued' | 'accepted' | 'delivered' | 'manual' | 'failed';
 
 export interface GroupMessage {
   id: string;
@@ -473,7 +473,7 @@ export interface SubmitReceipt {
   runId: string;
   messageId: string;
   /** `queued` = persisted only; `delivered` = target accepted the prompt. */
-  phase: 'queued' | 'delivered';
+  phase: 'queued' | 'accepted' | 'delivered';
   client: string;
   /** Where the prompt actually landed, when the adapter knows. */
   sessionId: string | null;
