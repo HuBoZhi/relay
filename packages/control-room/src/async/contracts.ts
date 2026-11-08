@@ -154,6 +154,8 @@ export interface SubmitStageInput {
   queueIfUnavailable?: boolean;
   /** Stage id supplied by the caller, so dependencies can be expressed. */
   id?: string;
+  /** Marks this stage as one round of a group discussion. Engine-generated. */
+  discussion?: { round: number } | null;
 }
 
 export interface SubmitTaskInput {
@@ -219,6 +221,12 @@ export interface Stage {
   completion: StageCompletion;
   callback: CallbackRoute;
   queueIfUnavailable: boolean;
+  /**
+   * Set when this stage is one round of a group discussion: `round` is which
+   * round it speaks in, from 2. A discussion stage waits on every stage of the
+   * previous round and its prompt is assembled from their results.
+   */
+  discussion?: { round: number } | null;
   runIds: string[];
   status: LayerStatus;
   createdAt: string;
@@ -309,6 +317,8 @@ export interface CallbackRecord {
     reason: string | null;
     /** Stage dispatch this callback triggered, when authorised. */
     triggeredStageId: string | null;
+    /** Every stage this callback triggered; `triggeredStageId` keeps the first. */
+    triggeredStageIds?: string[];
   };
 }
 
@@ -434,6 +444,12 @@ export interface PostGroupMessageInput {
   sender: GroupSender;
   body: string;
   mentions?: GroupMention[];
+  /**
+   * Ask the mentioned agents to discuss each other's answers instead of only
+   * answering in parallel. `rounds` is the total rounds per agent (first answer
+   * included), 2–4; needs at least two work mentions to have any effect.
+   */
+  discussion?: { rounds?: number } | null;
 }
 
 export interface JoinGroupInput {
@@ -500,6 +516,8 @@ export interface CallbackReceipt {
   delivery: CallbackRecord['delivery'];
   /** Stage that this callback started, when the chain is authorised. */
   continuedStageId: string | null;
+  /** Every stage this callback started; `continuedStageId` keeps the first. */
+  continuedStageIds?: string[];
   /** Group message that carries this result, when the task belongs to a group. */
   groupMessageId: string | null;
   status: LayerStatus;

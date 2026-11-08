@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased - Minor]
 
+### Added
+
+- `@agent-relay/control-room`: group chats support discussion mode — @ two or more agents with work and they answer in parallel, then read each other's answers and respond round by round (2–4 rounds, on by default in the composer). Each discussion round starts only after every participant's previous round reports, reuses that participant's client session, and posts a system line in the conversation when a new round begins.
+
 ### Changed
 
 - `@agent-relay/control-room`: choose ZCode MCP access permissions per group-chat request or task stage, including continued sessions; requests retain the selected policy and older MCP servers report when verified switching is unavailable.

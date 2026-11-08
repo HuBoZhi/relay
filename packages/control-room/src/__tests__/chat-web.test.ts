@@ -310,6 +310,41 @@ describe('chat page', () => {
     expect(JSON.parse(String(posted?.init?.body)).mentions[0].session.permissionMode).toBe('guarded');
   });
 
+  it('sends the discussion toggle with a dispatch and keeps it in the group draft', async () => {
+    const ui = await setup(route());
+    for (let i = 0; i < 40 && !ui.element('#path-select'); i += 1) await settle();
+    ui.element('#add-participant')?.click();
+    await settle();
+    // Discussion is on by default: the point of addressing two agents is the talk.
+    const toggle = ui.element('#discussion-toggle') as HTMLInputElement;
+    expect(toggle?.checked).toBe(true);
+    const rounds = ui.element('#discussion-rounds') as HTMLSelectElement;
+    rounds.value = '3';
+    rounds.dispatchEvent(new ui.window.Event('change', { bubbles: true }));
+    expect(JSON.parse(ui.window.localStorage.getItem('relay.chat.draft.grp_1') || '{}').discussion)
+      .toEqual({ enabled: true, rounds: 3 });
+
+    (ui.element('#body-input') as HTMLTextAreaElement).value = '两位讨论一下方案';
+    (ui.element('#path-select') as HTMLSelectElement).value = 'D:////Work////MediaDock';
+    ui.element('#dispatch-button')?.click();
+    await settle(); await settle();
+    const posted = ui.calls.find((call) => call.init?.method === 'POST');
+    expect(JSON.parse(String(posted?.init?.body)).discussion).toEqual({ rounds: 3 });
+
+    // Off means the flag is not sent at all, and the round picker follows the toggle.
+    const refreshed = ui.element('#discussion-toggle') as HTMLInputElement;
+    refreshed.checked = false;
+    refreshed.dispatchEvent(new ui.window.Event('change', { bubbles: true }));
+    await settle();
+    expect((ui.element('#discussion-rounds') as HTMLSelectElement).disabled).toBe(true);
+    (ui.element('#body-input') as HTMLTextAreaElement).value = '两位各自看下';
+    (ui.element('#path-select') as HTMLSelectElement).value = 'D:////Work////MediaDock';
+    ui.element('#dispatch-button')?.click();
+    await settle(); await settle();
+    const lastPosted = ui.calls.filter((call) => call.init?.method === 'POST').at(-1);
+    expect(JSON.parse(String(lastPosted?.init?.body)).discussion).toBeNull();
+  });
+
   it('keeps the message draft and caret when a background refresh replaces the conversation', async () => {
     const ui = await setup(route());
     const input = ui.element('#body-input') as HTMLTextAreaElement;

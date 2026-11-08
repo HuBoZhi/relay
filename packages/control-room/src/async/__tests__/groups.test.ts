@@ -306,6 +306,157 @@ describe('group chat', () => {
     await engine.close();
   });
 
+  it('runs a discussion: round two starts together and answers what the others said', async () => {
+    const zcodeAdapter = new FakeZcode();
+    const workbuddyAdapter = new FakeZcode('workbuddy');
+    const engine = new AsyncEngine({
+      adapters: [zcodeAdapter, workbuddyAdapter, new FakeZcode('codex')],
+      dataRoot: await scratchRoot(),
+    });
+    const { group } = await engine.createGroup({ name: '讨论群', creator: codex });
+
+    const posted = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '该用会话续聊还是每轮新开会话？',
+      mentions: [
+        workMention(),
+        workMention({
+          target: 'workbuddy',
+          client: 'workbuddy',
+          model: { account: 'workbuddy', provider: 'workbuddy', modelId: 'deepseek-chat', reasoning: 'standard' },
+        }),
+      ],
+      discussion: { rounds: 2 },
+    });
+    const taskId = posted.receipt?.taskId as string;
+
+    // Round one runs in parallel; round two waits for every round-one stage.
+    const first = await engine.task(taskId);
+    expect(first?.stages).toHaveLength(4);
+    expect(first?.runs).toHaveLength(2);
+    expect(first?.task.authorization.allowChain).toBe(true);
+    const round2 = first?.stages.filter((stage) => stage.discussion?.round === 2) ?? [];
+    expect(round2).toHaveLength(2);
+    for (const stage of round2) {
+      expect(stage.status.execution.state).toBe('awaiting-dependency');
+      expect(stage.dependsOn).toHaveLength(2);
+    }
+
+    const detail = async () => engine.task(taskId);
+    const runOf = async (client: string) => {
+      const snapshot = await detail();
+      const stage = snapshot?.stages.find((item) => item.client === client && !item.discussion);
+      const run = snapshot?.runs.find((item) => item.stageId === stage?.id);
+      return { stageId: stage?.id as string, runId: run?.id as string };
+    };
+
+    // The first report alone must not start round two.
+    const zcodeRound1 = await runOf('zcode');
+    const firstCallback = await engine.recordCallback({
+      taskId,
+      stageId: zcodeRound1.stageId,
+      runId: zcodeRound1.runId,
+      outcome: 'completed',
+      summary: '我建议续聊同一会话：上下文完整，轮次之间不需要重述。',
+    });
+    expect(firstCallback.continuedStageIds ?? []).toEqual([]);
+    expect((await detail())?.runs).toHaveLength(2);
+
+    // With both answers in, both round-two stages start at once.
+    const workbuddyRound1 = await runOf('workbuddy');
+    const secondCallback = await engine.recordCallback({
+      taskId,
+      stageId: workbuddyRound1.stageId,
+      runId: workbuddyRound1.runId,
+      outcome: 'completed',
+      summary: '我建议每轮新开会话：隔离干净，避免上下文越滚越长。',
+    });
+    expect(secondCallback.continuedStageIds ?? []).toHaveLength(2);
+
+    const after = await detail();
+    expect(after?.runs).toHaveLength(4);
+    const zcodeStage2 = after?.stages.find(
+      (item) => item.client === 'zcode' && item.discussion?.round === 2
+    );
+    // The round-two stage continues the session its own round one used.
+    expect(zcodeStage2?.session).toEqual({ policy: 'continue', sessionId: 'session_zcode_1' });
+
+    const zcodePrompt = zcodeAdapter.dispatches[1]?.body ?? '';
+    expect(zcodePrompt).toContain('第 2 轮讨论');
+    expect(zcodePrompt).toContain('该用会话续聊还是每轮新开会话');
+    expect(zcodePrompt).toContain('ZCode（你自己上一轮）');
+    expect(zcodePrompt).toContain('我建议续聊同一会话');
+    expect(zcodePrompt).toContain('WorkBuddy（deepseek-chat）');
+    expect(zcodePrompt).toContain('我建议每轮新开会话');
+    const workbuddyPrompt = workbuddyAdapter.dispatches[1]?.body ?? '';
+    expect(workbuddyPrompt).toContain('WorkBuddy（你自己上一轮）');
+    expect(workbuddyPrompt).toContain('ZCode（GLM-5.3-Flash）');
+
+    // The conversation shows the round transition and both first answers.
+    const view = await engine.group(group.id);
+    expect(view?.messages.some((message) => message.kind === 'system' && message.body.includes('第 2 轮讨论开始'))).toBe(true);
+    expect(view?.messages.filter((message) => message.kind === 'result')).toHaveLength(2);
+    await engine.close();
+  });
+
+  it('keeps a plain broadcast one round even when a participant reports done', async () => {
+    const zcode = new FakeZcode();
+    const workbuddy = new FakeZcode('workbuddy');
+    const engine = new AsyncEngine({
+      adapters: [zcode, workbuddy, new FakeZcode('codex')],
+      dataRoot: await scratchRoot(),
+    });
+    const { group } = await engine.createGroup({ name: '并行群', creator: codex });
+    const posted = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '两位各自看下',
+      mentions: [workMention(), workMention({ target: 'workbuddy', client: 'workbuddy' })],
+    });
+    const taskId = posted.receipt?.taskId as string;
+    expect(posted.receipt?.status.execution.state).not.toBe('awaiting-dependency');
+
+    const detail = await engine.task(taskId);
+    expect(detail?.task.authorization.allowChain).toBe(false);
+    const stage = detail?.stages.find((item) => item.client === 'zcode');
+    const run = detail?.runs.find((item) => item.stageId === stage?.id);
+    await engine.recordCallback({
+      taskId,
+      stageId: stage?.id as string,
+      runId: run?.id as string,
+      outcome: 'completed',
+      summary: '完成',
+    });
+    expect((await engine.task(taskId))?.runs).toHaveLength(2);
+    await engine.close();
+  });
+
+  it('clamps discussion rounds and ignores discussion for a single mention', async () => {
+    const zcode = new FakeZcode();
+    const workbuddy = new FakeZcode('workbuddy');
+    const engine = new AsyncEngine({
+      adapters: [zcode, workbuddy, new FakeZcode('codex')],
+      dataRoot: await scratchRoot(),
+    });
+    const { group } = await engine.createGroup({ name: '轮数群', creator: codex });
+
+    const capped = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '多轮也要有上限',
+      mentions: [workMention(), workMention({ target: 'workbuddy', client: 'workbuddy' })],
+      discussion: { rounds: 9 },
+    });
+    expect((await engine.task(capped.receipt?.taskId as string))?.stages).toHaveLength(8);
+
+    const single = await engine.postGroupMessage(group.id, {
+      sender: codex,
+      body: '一个人没有讨论对象',
+      mentions: [workMention()],
+      discussion: { rounds: 3 },
+    });
+    expect((await engine.task(single.receipt?.taskId as string))?.stages).toHaveLength(1);
+    await engine.close();
+  });
+
   it('reports a failed request as failed and starts nothing', async () => {
     const adapter = new FakeZcode();
     const engine = new AsyncEngine({

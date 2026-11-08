@@ -76,6 +76,9 @@ const state = {
     // Each addressed agent carries its own model and reasoning level: two agents in
     // one message rarely run the same model.
     participants: [{ target: 'zcode', model: 'GLM-5.3-Flash', reasoning: 'max' }],
+    // When more than one agent is addressed, let them read each other's answers
+    // and respond; `rounds` counts every round, first answer included.
+    discussion: { enabled: true, rounds: 2 },
     path: '',
     projectId: '',
   },
@@ -233,6 +236,12 @@ async function openGroup(groupId) {
         body: typeof stored?.body === 'string' ? stored.body : '',
         path: typeof stored?.path === 'string' ? stored.path : '',
         projectId: typeof stored?.projectId === 'string' ? stored.projectId : '',
+        discussion: stored?.discussion && typeof stored.discussion === 'object'
+          ? {
+              enabled: stored.discussion.enabled !== false,
+              rounds: [2, 3, 4].includes(Number(stored.discussion.rounds)) ? Number(stored.discussion.rounds) : 2,
+            }
+          : { enabled: true, rounds: 2 },
         participants: Array.isArray(stored?.participants) && stored.participants.length &&
           stored.participants.every((p) => p && AGENTS.some((a) => a.id === p.target) &&
             typeof p.model === 'string' && typeof p.reasoning === 'string')
@@ -460,6 +469,18 @@ function renderComposer() {
       <div class="participants" id="participants">${rows}</div>
       ${draft.participants.some(p => p.target === 'zcode') ? '<span class="hint permission-note">权限控制 ZCode 的操作确认策略。MCP 暂不支持人工审批；需确认的操作会被拒绝。完全访问会减少确认，仅对本次派活生效。</span>' : ''}
       ${issue('mentions[0].model')}
+      <div class="discussion-row">
+        <label class="discussion-toggle">
+          <input type="checkbox" id="discussion-toggle"${draft.discussion.enabled ? ' checked' : ''} />
+          讨论模式
+        </label>
+        <select id="discussion-rounds" aria-label="讨论轮数"${draft.discussion.enabled ? '' : ' disabled'}>
+          <option value="2"${draft.discussion.rounds === 2 ? ' selected' : ''}>互相回应 1 轮</option>
+          <option value="3"${draft.discussion.rounds === 3 ? ' selected' : ''}>互相回应 2 轮</option>
+          <option value="4"${draft.discussion.rounds === 4 ? ' selected' : ''}>互相回应 3 轮</option>
+        </select>
+        <span class="hint">@ 两个以上 Agent 时可用：各自先回答，然后互相阅读对方回答并逐轮回应。</span>
+      </div>
     </div>
     <div class="composer-row">
       <div class="field project${invalid('mentions[0].project.path')}">
@@ -571,6 +592,14 @@ function readDraft() {
     reasoning: row.querySelector('[data-role="reasoning"]').value,
     permissionMode: row.querySelector('[data-role="permission"]')?.value || '',
   }));
+  const discussionToggle = $('#discussion-toggle');
+  const discussionRounds = $('#discussion-rounds');
+  if (discussionToggle) {
+    state.draft.discussion = {
+      enabled: discussionToggle.checked,
+      rounds: [2, 3, 4].includes(Number(discussionRounds?.value)) ? Number(discussionRounds.value) : 2,
+    };
+  }
   const projectSelect = $('#path-select');
   const pathInput = $('#path-input');
   if (projectSelect) {
@@ -655,7 +684,16 @@ async function send(work) {
   try {
     await api(`/api/groups/${encodeURIComponent(state.view.group.id)}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ sender: senderPayload(), body, mentions: mentionsFor(work) }),
+      body: JSON.stringify({
+        sender: senderPayload(),
+        body,
+        mentions: mentionsFor(work),
+        // The engine ignores this without two work mentions, so it is safe to send
+        // whenever the toggle is on.
+        discussion: work && state.draft.discussion.enabled
+          ? { rounds: state.draft.discussion.rounds }
+          : null,
+      }),
     });
     if (state.activeId === sendingGroup && state.draft.body.trim() === body) {
       state.draft.body = '';
@@ -1014,6 +1052,17 @@ function bindComposer() {
       renderConversation();
     };
   }
+
+  const discussionToggle = $('#discussion-toggle');
+  if (discussionToggle) {
+    discussionToggle.onchange = () => {
+      readDraft();
+      // Re-render so the round selector follows the toggle's enabled state.
+      renderConversation();
+    };
+  }
+  const discussionRounds = $('#discussion-rounds');
+  if (discussionRounds) discussionRounds.onchange = () => readDraft();
 
   const projectSelect = $('#path-select');
   if (projectSelect) {

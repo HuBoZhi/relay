@@ -352,6 +352,7 @@ export class AsyncEngine {
           },
           callback: spec.callback ?? { ...input.origin },
           queueIfUnavailable: spec.queueIfUnavailable !== false,
+          discussion: spec.discussion ?? null,
           runIds: [],
           status: freshStatus(at, 'async.submit'),
           createdAt: at,
@@ -548,7 +549,9 @@ export class AsyncEngine {
         runId: run.id,
         topicName: this.store.snapshot.topics[task.topicId]?.name ?? '',
         title: task.title,
-        body: task.body,
+        // A discussion round speaks about what the others just said, so its body
+        // is assembled from the previous round's reports, not the bare request.
+        body: discussionPromptFor(this.store.snapshot, stage, task) ?? task.body,
         client: stage.client,
         project: stage.project,
         session: stage.session,
@@ -980,14 +983,60 @@ export class AsyncEngine {
 
     let receipt: SubmitReceipt | null = null;
     if (requests.length > 0) {
+      const rounds = discussionRounds(input.discussion, requests.length);
+      const stages: SubmitStageInput[] = requests.map((mention, index) => ({
+        id: `round1-${index}`,
+        kind: stageKindFor(mention),
+        label: `@${mention.target}`,
+        client: mention.client as string,
+        project: {
+          id: String((mention.project as { id?: string }).id ?? ''),
+          path: String((mention.project as { path?: string }).path ?? ''),
+        },
+        session: mention.session ?? { policy: 'new' as const, sessionId: null },
+        model: mention.model as ModelConfig,
+        completion: mention.completion ?? {
+          condition: `完成 ${mention.target} 的请求`,
+          requiresEvidence: false,
+        },
+        callback: { app: sender.app || 'relay', device: sender.device || 'local', chatId: sender.chatId },
+        queueIfUnavailable: true,
+      }));
+      // A discussion round speaks only after every stage of the previous round has
+      // reported, so each agent answers what the others actually said, not a guess.
+      for (let round = 2; round <= rounds; round += 1) {
+        for (const [index, mention] of requests.entries()) {
+          stages.push({
+            id: `round${round}-${index}`,
+            kind: stageKindFor(mention),
+            label: `@${mention.target} · 第${round}轮讨论`,
+            client: mention.client as string,
+            project: {
+              id: String((mention.project as { id?: string }).id ?? ''),
+              path: String((mention.project as { path?: string }).path ?? ''),
+            },
+            // The session id is patched in when the previous round reports; a
+            // client that never reported one falls back to a fresh session.
+            session: { policy: 'continue' as const, sessionId: null },
+            model: mention.model as ModelConfig,
+            completion: { condition: `完成第${round}轮讨论发言`, requiresEvidence: false },
+            callback: { app: sender.app || 'relay', device: sender.device || 'local', chatId: sender.chatId },
+            queueIfUnavailable: true,
+            dependsOn: requests.map((_dep, prev) => `round${round - 1}-${prev}`),
+            discussion: { round },
+          });
+        }
+      }
       receipt = await this.submit({
         groupId,
         topic: { name: current.name, id: current.topicId },
         title: titleFromBody(body, requests),
         body: body || '（无正文，按 @ 中的要求执行）',
+        // Chain authorisation exists only for discussion tasks: a plain parallel
+        // dispatch must stay one round, no matter who reports completion.
         authorization: {
           scopes: requests.map((mention) => stageKindFor(mention)),
-          allowChain: false,
+          allowChain: rounds > 1,
         },
         origin: {
           app: sender.app || 'relay',
@@ -996,23 +1045,7 @@ export class AsyncEngine {
           senderId: sender.agentId,
           workflowIds: [],
         },
-        stages: requests.map((mention) => ({
-          kind: stageKindFor(mention),
-          label: `@${mention.target}`,
-          client: mention.client as string,
-          project: {
-            id: String((mention.project as { id?: string }).id ?? ''),
-            path: String((mention.project as { path?: string }).path ?? ''),
-          },
-          session: mention.session ?? { policy: 'new' as const, sessionId: null },
-          model: mention.model as ModelConfig,
-          completion: mention.completion ?? {
-            condition: `完成 ${mention.target} 的请求`,
-            requiresEvidence: false,
-          },
-          callback: { app: sender.app || 'relay', device: sender.device || 'local', chatId: sender.chatId },
-          queueIfUnavailable: true,
-        })),
+        stages,
       });
       await this.markRequestDispatched(groupId, messageId, receipt);
     }
@@ -1247,7 +1280,7 @@ export class AsyncEngine {
               // A replay is acknowledged, not re-recorded: the caller learns the
               // original id so it can stop retrying, but nothing happens twice.
               receipt: { ...toCallbackReceipt(existing), recorded: false },
-              continueStageId: null as string | null,
+              continueStageIds: [] as string[],
               duplicate: true,
             },
             events: [],
@@ -1323,9 +1356,11 @@ export class AsyncEngine {
       task.updatedAt = at;
 
       // Cancelled tasks keep the record but must not start anything.
-      const continuation = duplicate || task.cancelled ? null : this.nextStageFor(state, task, stage, input);
-      if (continuation) {
-        callback.delivery.triggeredStageId = continuation.stageId;
+      const continuations = duplicate || task.cancelled ? [] : this.nextStagesFor(state, task, stage, input);
+      const firstContinuation = continuations[0] ?? null;
+      if (firstContinuation) {
+        callback.delivery.triggeredStageId = firstContinuation;
+        callback.delivery.triggeredStageIds = continuations;
       } else if (task.cancelled) {
         callback.delivery.state = 'manual';
         callback.delivery.reason = '任务已取消，回传仅记录状态，不启动后续阶段';
@@ -1351,7 +1386,7 @@ export class AsyncEngine {
       return {
         result: {
           receipt: toCallbackReceipt(callback),
-          continueStageId: continuation ? continuation.stageId : null,
+          continueStageIds: continuations,
           duplicate,
         },
         events,
@@ -1373,35 +1408,38 @@ export class AsyncEngine {
     }
 
     const delivered = await this.deliverCallback(recorded.receipt.callbackId);
-    if (recorded.continueStageId) {
-      await this.continueStage(recorded.continueStageId);
+    // A discussion round has one stage per agent: the last report of the previous
+    // round starts all of them, not just the first candidate.
+    for (const stageId of recorded.continueStageIds) {
+      await this.continueStage(stageId);
     }
     return delivered;
   }
 
-  /** Decide whether this callback may start the next authorised stage. */
-  private nextStageFor(
+  /** Every awaiting stage this callback may start, in declared order. */
+  private nextStagesFor(
     state: AsyncState,
     task: Task,
     stage: Stage,
     input: RecordCallbackInput
-  ): { stageId: string } | null {
-    if (input.outcome !== 'completed') return null;
-    if (!task.authorization.allowChain) return null;
+  ): string[] {
+    if (input.outcome !== 'completed') return [];
+    if (!task.authorization.allowChain) return [];
+    const ready: string[] = [];
     for (const id of task.stageIds) {
       const candidate = state.stages[id];
       if (!candidate || candidate.index <= stage.index) continue;
       if (candidate.status.execution.state !== 'awaiting-dependency') continue;
-      const ready = candidate.dependsOn.every((depId) => {
+      const ok = candidate.dependsOn.every((depId) => {
         const dep = state.stages[depId];
         if (!dep) return false;
         return Object.values(state.callbacks).some(
           (callback) => callback.stageId === dep.id && callback.outcome === 'completed' && !callback.duplicate
         );
       });
-      if (ready) return { stageId: candidate.id };
+      if (ok) ready.push(candidate.id);
     }
-    return null;
+    return ready;
   }
 
   private async continueStage(stageId: string): Promise<void> {
@@ -1416,6 +1454,18 @@ export class AsyncEngine {
       const current = state.stages[stageId];
       const currentTask = state.tasks[current?.taskId ?? ''];
       if (!current || !currentTask) return { result: null };
+      // A discussion round continues the session its previous round used, so the
+      // agent answers with its own earlier turn still in context. Without a known
+      // session id the bridge opens a fresh one; the prompt carries the material.
+      const round = current.discussion?.round ?? 0;
+      if (round >= 2 && !current.session.sessionId) {
+        const previous = currentTask.stageIds
+          .map((id) => state.stages[id])
+          .find((item) => item?.client === current.client && (item?.discussion?.round ?? 0) === round - 1);
+        if (previous?.session.sessionId) {
+          current.session = { policy: 'continue', sessionId: previous.session.sessionId };
+        }
+      }
       const next = createRun(current, at, current.runIds.length + 1);
       current.runIds.push(next.id);
       state.runs[next.id] = next;
@@ -1435,6 +1485,22 @@ export class AsyncEngine {
         summary: `上一阶段完成，继续已授权阶段「${current.label}」`,
         at,
       });
+      // Announce the round in the conversation it belongs to, so a reader can
+      // follow who is about to speak without opening the task timeline.
+      const group = currentTask.groupId ? state.groups[currentTask.groupId] : null;
+      if (current.discussion && group) {
+        appendGroupMessage(state, {
+          group,
+          kind: 'system',
+          sender: { agentId: 'relay', displayName: 'Relay', app: 'relay', device: 'local', chatId: '' },
+          body: `第 ${current.discussion.round} 轮讨论开始：${current.label} 正在阅读上一轮各方发言。`,
+          mentions: [],
+          state: 'sent',
+          reason: null,
+          at,
+        });
+        group.updatedAt = at;
+      }
       return {
         result: next.id,
         events: [{ kind: 'stage.continued', message: current.label, taskId: currentTask.id, stageId }],
@@ -1903,7 +1969,11 @@ function validateStage(stage: SubmitStageInput, index: number, issues: Validatio
     issues.push({ field: `${at}.completion.condition`, message: '必须填写完成条件' });
   }
   if (stage.session?.policy === 'continue' && !stage.session.sessionId?.trim()) {
-    issues.push({ field: `${at}.session.sessionId`, message: '接续会话必须指定会话 ID' });
+    // A discussion round is engine-generated and continues its previous round's
+    // session; the id is patched in when that round reports, so empty is legal here.
+    if (!stage.discussion) {
+      issues.push({ field: `${at}.session.sessionId`, message: '接续会话必须指定会话 ID' });
+    }
   }
   if (stage.session?.permissionMode !== undefined &&
       (stage.client !== 'zcode' || !['plan', 'build', 'edit', 'guarded', 'yolo'].includes(stage.session.permissionMode))) {
@@ -2090,6 +2160,9 @@ function toCallbackReceipt(callback: CallbackRecord, groupMessageId: string | nu
     recorded: !callback.duplicate,
     delivery: { ...callback.delivery },
     continuedStageId: callback.delivery.triggeredStageId,
+    continuedStageIds:
+      callback.delivery.triggeredStageIds ??
+      (callback.delivery.triggeredStageId ? [callback.delivery.triggeredStageId] : []),
     groupMessageId,
     status,
   };
@@ -2280,6 +2353,54 @@ function normalizeMention(mention: GroupMention): GroupMention {
     ...(mention.session ? { session: mention.session } : {}),
     ...(mention.completion ? { completion: mention.completion } : {}),
   };
+}
+
+/**
+ * Resolve the requested discussion depth. One agent arguing with itself is not a
+ * discussion, so anything below two participants answers once, in parallel, and
+ * the round count is clamped to 1–4 to keep one message from running all day.
+ */
+function discussionRounds(input: PostGroupMessageInput['discussion'], requestCount: number): number {
+  if (!input || requestCount < 2) return 1;
+  const requested = Number(input.rounds ?? 2);
+  if (!Number.isFinite(requested) || requested < 2) return 1;
+  return Math.min(4, Math.floor(requested));
+}
+
+/**
+ * The prompt a discussion stage receives: the original question plus what every
+ * participant said last round. Built at dispatch time, because the material only
+ * exists once the previous round has reported. `null` keeps the task body.
+ */
+function discussionPromptFor(state: AsyncState, stage: Stage, task: Task): string | null {
+  const round = stage.discussion?.round ?? 0;
+  if (round < 2) return null;
+  const turns: string[] = [];
+  for (const depId of stage.dependsOn) {
+    const dep = state.stages[depId];
+    if (!dep) continue;
+    const completed = Object.values(state.callbacks)
+      .filter((item) => item.stageId === dep.id && item.outcome === 'completed' && !item.duplicate)
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+    const callback = completed.at(-1);
+    if (!callback) continue;
+    const who =
+      dep.client === stage.client
+        ? `${agentDisplayName(dep.client)}（你自己上一轮）`
+        : `${agentDisplayName(dep.client)}（${dep.model.modelId}）`;
+    turns.push(`【${who}的发言】\n${callback.summary}`);
+  }
+  if (turns.length === 0) return null;
+  return [
+    `这是关于下面这个问题的第 ${round} 轮讨论。`,
+    '',
+    '【原始问题】',
+    task.body,
+    '',
+    ...turns,
+    '',
+    '请回应其他参与者的观点：说明你认同与不认同之处及理由，修正或补充你自己上一轮的回答，最后给出你当前最完整的结论。不要原样重复上一轮内容。',
+  ].join('\n');
 }
 
 function stageKindFor(mention: GroupMention): string {
